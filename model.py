@@ -13,7 +13,7 @@ from keras.callbacks import EarlyStopping, ModelCheckpoint
 from keras import backend as K
 
 import cv2
-from skimage.transform import resize
+#from skimage.transform import resize
 
 # Build U-Net model
 def build_model(IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS):   
