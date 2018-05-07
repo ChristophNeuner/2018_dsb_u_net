@@ -12,8 +12,8 @@ from keras.layers.merge import concatenate
 from keras.callbacks import EarlyStopping, ModelCheckpoint
 from keras import backend as K
 
-import cv2
-#from skimage.transform import resize
+#import cv2
+from skimage.transform import resize
 
 # Build U-Net model
 def build_model(IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS):   
@@ -75,7 +75,7 @@ def fit_model(model, MODEL_DIR, X_train, Y_train):
         os.makedirs(currentModelDir)
     filepath = os.path.join(currentModelDir, 'epoch{epoch:04d}-val_loss{val_loss:.2f}.h5')
     checkpointer = ModelCheckpoint(filepath, verbose=1, save_best_only=True)
-    results = model.fit(X_train, Y_train, validation_split=0.1, batch_size=8, epochs=30, 
+    results = model.fit(X_train, Y_train, validation_split=0.1, batch_size=8, epochs=40, 
                         callbacks=[earlystopper, checkpointer])
     
     
@@ -95,10 +95,12 @@ def make_predictions(model_path, X_train, X_test, sizes_test):
     # Create list of upsampled test masks
     preds_test_upsampled = []
     for i in range(len(preds_test)):
-        #preds_test_upsampled.append(resize(np.squeeze(preds_test[i]), 
-                                           #(sizes_test[i][0], sizes_test[i][1]), 
-                                           #mode='constant', preserve_range=True))
-        preds_test_upsampled.append(cv2.resize(np.squeeze(preds_test[i]),
-                                                (sizes_test[i][0], sizes_test[i][1]),
-                                                interpolation=cv2.INTER_AREA))
+        ###skimage
+        preds_test_upsampled.append(resize(np.squeeze(preds_test[i]), 
+                                           (sizes_test[i][0], sizes_test[i][1]), 
+                                           mode='constant', preserve_range=True))
+        ###cv2
+        #preds_test_upsampled.append(cv2.resize(np.squeeze(preds_test[i]),
+                                                #(sizes_test[i][0], sizes_test[i][1]),
+                                                #interpolation=cv2.INTER_AREA))
     return preds_train_t, preds_val_t, preds_test_upsampled

@@ -1,10 +1,10 @@
 import os
 import numpy as np
 import sys
-import cv2
+#import cv2
 from tqdm import tqdm
-#from skimage.io import imread, imshow, imread_collection, concatenate_images
-#from skimage.transform import resize
+from skimage.io import imread, imshow, imread_collection, concatenate_images
+from skimage.transform import resize
 from skimage.morphology import label
 from keras import backend as K
 
@@ -23,21 +23,27 @@ def get_data(TRAIN_PATH, TEST_PATH, IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS):
     for n, id_ in tqdm(enumerate(train_ids), total=len(train_ids)):
         path = TRAIN_PATH + id_
         try:
-            img = cv2.imread(path + '/images/' + id_ + '.png')[:,:,:IMG_CHANNELS]
+            ###with skimage
+            img = imread(path + '/images/' + id_ + '.png')[:,:,:IMG_CHANNELS]
+            ###with cv2
+            #img = cv2.imread(path + '/images/' + id_ + '.png')[:,:,:IMG_CHANNELS]
         except:
             print(id_)
             continue
         ###resize with skimage.transform
-        #img = resize(img, (IMG_HEIGHT, IMG_WIDTH), mode='constant', preserve_range=True)
+        img = resize(img, (IMG_HEIGHT, IMG_WIDTH), mode='constant', preserve_range=True)
         ###resize with cv2
-        img = cv2.resize(img, (IMG_HEIGHT, IMG_WIDTH), interpolation=cv2.INTER_AREA)
+        #img = cv2.resize(img, (IMG_HEIGHT, IMG_WIDTH), interpolation=cv2.INTER_AREA)
         ###scale image channels
-        #img = scale_img_channels(img, IMG_CHANNELS)
+        img = scale_img_channels(img, IMG_CHANNELS)
         X_train[n] = img
         mask = np.zeros((IMG_HEIGHT, IMG_WIDTH, 1), dtype=np.bool)
         for mask_file in next(os.walk(path + '/masks/'))[2]:
-            mask_ = cv2.imread(path + '/masks/' + mask_file, 0)
-            mask_ = np.expand_dims(cv2.resize(mask_, (IMG_HEIGHT, IMG_WIDTH), interpolation=cv2.INTER_AREA), axis=-1)
+            mask_ = imread(path + '/masks/' + mask_file, 0)
+            #mask_ = cv2.imread(path + '/masks/' + mask_file, 0)
+            mask_ = np.expand_dims(resize(mask_, (IMG_HEIGHT, IMG_WIDTH), mode='constant', 
+                                      preserve_range=True), axis=-1)
+            #mask_ = np.expand_dims(cv2.resize(mask_, (IMG_HEIGHT, IMG_WIDTH), interpolation=cv2.INTER_AREA), axis=-1)
             mask = np.maximum(mask, mask_)
         Y_train[n] = mask
 
@@ -49,16 +55,17 @@ def get_data(TRAIN_PATH, TEST_PATH, IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS):
     for n, id_ in tqdm(enumerate(test_ids), total=len(test_ids)):
         path = TEST_PATH + id_
         try:
-            img = cv2.imread(path + '/images/' + id_ + '.png')[:,:,:IMG_CHANNELS]
+            img = imread(path + '/images/' + id_ + '.png')[:,:,:IMG_CHANNELS]
+            #img = cv2.imread(path + '/images/' + id_ + '.png')[:,:,:IMG_CHANNELS]
         except:
             print(id_)
         sizes_test.append([img.shape[0], img.shape[1]])
         ###resize with skimage.transform
-        #img = resize(img, (IMG_HEIGHT, IMG_WIDTH), mode='constant', preserve_range=True)
+        img = resize(img, (IMG_HEIGHT, IMG_WIDTH), mode='constant', preserve_range=True)
         ###resize with cv2
-        img = cv2.resize(img, (IMG_HEIGHT, IMG_WIDTH), interpolation=cv2.INTER_AREA)
+        #mg = cv2.resize(img, (IMG_HEIGHT, IMG_WIDTH), interpolation=cv2.INTER_AREA)
         ###scale image channels
-        #img = scale_img_channels(img, IMG_CHANNELS)
+        img = scale_img_channels(img, IMG_CHANNELS)
         X_test[n] = img
         
     print('Done!')
