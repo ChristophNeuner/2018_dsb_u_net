@@ -9,7 +9,7 @@ from keras.layers.core import Lambda
 from keras.layers.convolutional import Conv2D, Conv2DTranspose
 from keras.layers.pooling import MaxPooling2D
 from keras.layers.merge import concatenate
-from keras.callbacks import EarlyStopping, ModelCheckpoint
+from keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
 from keras import backend as K
 
 #import cv2
@@ -75,7 +75,17 @@ def fit_model(model, MODEL_DIR, X_train, Y_train):
         os.makedirs(currentModelDir)
     filepath = os.path.join(currentModelDir, 'epoch{epoch:04d}-val_loss{val_loss:.2f}.h5')
     checkpointer = ModelCheckpoint(filepath, verbose=1, save_best_only=True)
-    results = model.fit(X_train, Y_train, validation_split=0.1, batch_size=8, epochs=40, 
+    """
+    reduceLrOnPlateau = ReduceLROnPlateau(monitor= 'val_loss',
+                                            factor= 0.5,
+                                            patience= 5,
+                                            verbose= 1,
+                                            mode= 'auto',
+                                            epsilon= 0.0001,
+                                            cooldown= 5,
+                                            min_lr= 1e-7)
+                                           """
+    results = model.fit(X_train, Y_train, validation_split=0.1, batch_size=8, epochs=60, 
                         callbacks=[earlystopper, checkpointer])
     
     

@@ -10,6 +10,7 @@ from keras import backend as K
 
 smooth = 1.
 
+
 def get_data(TRAIN_PATH, TEST_PATH, IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS):
     # Get train and test IDs
     train_ids = next(os.walk(TRAIN_PATH))[1]
