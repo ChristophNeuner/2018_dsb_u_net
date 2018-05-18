@@ -11,6 +11,7 @@ from keras.layers.pooling import MaxPooling2D
 from keras.layers.merge import concatenate
 from keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
 from keras import backend as K
+from keras.preprocessing.image import ImageDataGenerator
 
 #import cv2
 from skimage.transform import resize
@@ -87,8 +88,50 @@ def fit_model(model, MODEL_DIR, X_train, Y_train):
                                            """
     results = model.fit(X_train, Y_train, validation_split=0.1, batch_size=8, epochs=60, 
                         callbacks=[earlystopper, checkpointer])
+
     
+#Fit model with generator for augmentation    
+def fit_model_generator(model, MODEL_DIR, ROOT_DIR, X_train, Y_train):
+    seed = 1
+    batch_size = 8
     
+    data_gen_args = dict(featurewise_center=True,
+                     featurewise_std_normalization=True,
+                     rotation_range=90.,
+                     width_shift_range=0.1,
+                     height_shift_range=0.1,
+                     zoom_range=0.2)
+
+    image_datagen = ImageDataGenerator(**data_gen_args)
+    mask_datagen = ImageDataGenerator(**data_gen_args)
+
+    
+    image_datagen.fit(X_train, seed = seed)
+    mask_datagen.fit(Y_train, seed = seed)
+    
+    augment_dir = os.path.join(ROOT_DIR, "augmented_images", datetime.now().strftime("%Y-%m-%d %H:%M:%S"),)
+    #if not os.path.exists(augment_dir):
+        #os.makedirs(augment_dir)
+    
+    image_generator = image_datagen.flow(X_train, batch_size=batch_size, shuffle=True, seed=seed, save_to_dir=None)
+    mask_generator = mask_datagen.flow(Y_train, batch_size=batch_size, shuffle=True, seed=seed, save_to_dir=None)
+
+    # combine generators into one which yields image and masks
+    train_generator = zip(image_generator, mask_generator)
+    
+    earlystopper = EarlyStopping(patience=5, verbose=1)
+    currentModelDir = os.path.join(MODEL_DIR, datetime.now().strftime("%Y-%m-%d %H:%M:%S"),)
+    if not os.path.exists(currentModelDir):
+        os.makedirs(currentModelDir)
+    filepath = os.path.join(currentModelDir, 'epoch{epoch:04d}-val_loss{val_loss:.2f}.h5')
+    checkpointer = ModelCheckpoint(filepath, verbose=1, save_best_only=True)
+    model.fit_generator(steps_per_epoch=len(X_train)/batch_size,
+                        generator=train_generator,
+                        epochs=60,
+                        callbacks=[earlystopper, checkpointer],
+                        use_multiprocessing=True,
+                        validation_data= ###TODO: extra_data as validation data###)
+
 #Make predictions
 #Predict on train, val and test
 def make_predictions(model_path, X_train, X_test, sizes_test):
