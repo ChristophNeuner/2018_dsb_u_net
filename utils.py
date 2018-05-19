@@ -11,66 +11,99 @@ from keras import backend as K
 smooth = 1.
 
 
-def get_data(TRAIN_PATH, TEST_PATH, IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS):
+def get_data(trainPath, valPath, testPath, imgHeight, imgWidth, imgChannels):
     # Get train and test IDs
-    train_ids = next(os.walk(TRAIN_PATH))[1]
-    test_ids = next(os.walk(TEST_PATH))[1]
+    train_ids = next(os.walk(trainPath))[1]
+    val_ids = next(os.walk(valPath))[1]
+    test_ids = next(os.walk(testPath))[1]
 
     # Get and resize train images and masks
-    X_train = np.zeros((len(train_ids), IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS), dtype=np.uint8)
-    Y_train = np.zeros((len(train_ids), IMG_HEIGHT, IMG_WIDTH, 1), dtype=np.bool)
+    X_train = np.zeros((len(train_ids), imgHeight, imgWidth, imgChannels), dtype=np.uint8)
+    Y_train = np.zeros((len(train_ids), imgHeight, imgWidth, 1), dtype=np.bool)
     print('Getting and resizing train images and masks ... ')
     sys.stdout.flush()
     for n, id_ in tqdm(enumerate(train_ids), total=len(train_ids)):
-        path = TRAIN_PATH + id_
+        path = trainPath + id_
         try:
             ###with skimage
-            img = imread(path + '/images/' + id_ + '.png')[:,:,:IMG_CHANNELS]
+            img = imread(path + '/images/' + id_ + '.png')[:,:,:imgChannels]
             ###with cv2
-            #img = cv2.imread(path + '/images/' + id_ + '.png')[:,:,:IMG_CHANNELS]
+            #img = cv2.imread(path + '/images/' + id_ + '.png')[:,:,:imgChannels]
         except:
             print(id_)
             continue
         ###resize with skimage.transform
-        img = resize(img, (IMG_HEIGHT, IMG_WIDTH), mode='constant', preserve_range=True)
+        img = resize(img, (imgHeight, imgWidth), mode='constant', preserve_range=True)
         ###resize with cv2
-        #img = cv2.resize(img, (IMG_HEIGHT, IMG_WIDTH), interpolation=cv2.INTER_AREA)
+        #img = cv2.resize(img, (imgHeight, imgWidth), interpolation=cv2.INTER_AREA)
         ###scale image channels
-        img = scale_img_channels(img, IMG_CHANNELS)
+        img = scale_img_channels(img, imgChannels)
         X_train[n] = img
-        mask = np.zeros((IMG_HEIGHT, IMG_WIDTH, 1), dtype=np.bool)
+        mask = np.zeros((imgHeight, imgWidth, 1), dtype=np.bool)
         for mask_file in next(os.walk(path + '/masks/'))[2]:
             mask_ = imread(path + '/masks/' + mask_file, 0)
             #mask_ = cv2.imread(path + '/masks/' + mask_file, 0)
-            mask_ = np.expand_dims(resize(mask_, (IMG_HEIGHT, IMG_WIDTH), mode='constant', 
+            mask_ = np.expand_dims(resize(mask_, (imgHeight, imgWidth), mode='constant', 
                                       preserve_range=True), axis=-1)
-            #mask_ = np.expand_dims(cv2.resize(mask_, (IMG_HEIGHT, IMG_WIDTH), interpolation=cv2.INTER_AREA), axis=-1)
+            #mask_ = np.expand_dims(cv2.resize(mask_, (imgHeight, imgWidth), interpolation=cv2.INTER_AREA), axis=-1)
             mask = np.maximum(mask, mask_)
         Y_train[n] = mask
-
+    
+    # Get and resize val images and masks
+    X_val = np.zeros((len(val_ids), imgHeight, imgWidth, imgChannels), dtype=np.uint8)
+    Y_val = np.zeros((len(val_ids), imgHeight, imgWidth, 1), dtype=np.bool)
+    print('Getting and resizing val images and masks ... ')
+    sys.stdout.flush()
+    for n, id_ in tqdm(enumerate(val_ids), total=len(val_ids)):
+        path = valPath + id_
+        try:
+            ###with skimage
+            img = imread(path + '/images/' + id_ + '.png')[:,:,:imgChannels]
+            ###with cv2
+            #img = cv2.imread(path + '/images/' + id_ + '.png')[:,:,:imgChannels]
+        except:
+            print(id_)
+            continue
+        ###resize with skimage.transform
+        img = resize(img, (imgHeight, imgWidth), mode='constant', preserve_range=True)
+        ###resize with cv2
+        #img = cv2.resize(img, (imgHeight, imgWidth), interpolation=cv2.INTER_AREA)
+        ###scale image channels
+        img = scale_img_channels(img, imgChannels)
+        X_val[n] = img
+        mask = np.zeros((imgHeight, imgWidth, 1), dtype=np.bool)
+        for mask_file in next(os.walk(path + '/masks/'))[2]:
+            mask_ = imread(path + '/masks/' + mask_file, 0)
+            #mask_ = cv2.imread(path + '/masks/' + mask_file, 0)
+            mask_ = np.expand_dims(resize(mask_, (imgHeight, imgWidth), mode='constant', 
+                                      preserve_range=True), axis=-1)
+            #mask_ = np.expand_dims(cv2.resize(mask_, (imgHeight, imgWidth), interpolation=cv2.INTER_AREA), axis=-1)
+            mask = np.maximum(mask, mask_)
+        Y_val[n] = mask
+    
     # Get and resize test images
-    X_test = np.zeros((len(test_ids), IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS), dtype=np.uint8)
+    X_test = np.zeros((len(test_ids), imgHeight, imgWidth, imgChannels), dtype=np.uint8)
     sizes_test = []
     print('Getting and resizing test images ... ')
     sys.stdout.flush()
     for n, id_ in tqdm(enumerate(test_ids), total=len(test_ids)):
-        path = TEST_PATH + id_
+        path = testPath + id_
         try:
-            img = imread(path + '/images/' + id_ + '.png')[:,:,:IMG_CHANNELS]
-            #img = cv2.imread(path + '/images/' + id_ + '.png')[:,:,:IMG_CHANNELS]
+            img = imread(path + '/images/' + id_ + '.png')[:,:,:imgChannels]
+            #img = cv2.imread(path + '/images/' + id_ + '.png')[:,:,:imgChannels]
         except:
             print(id_)
         sizes_test.append([img.shape[0], img.shape[1]])
         ###resize with skimage.transform
-        img = resize(img, (IMG_HEIGHT, IMG_WIDTH), mode='constant', preserve_range=True)
+        img = resize(img, (imgHeight, imgWidth), mode='constant', preserve_range=True)
         ###resize with cv2
-        #mg = cv2.resize(img, (IMG_HEIGHT, IMG_WIDTH), interpolation=cv2.INTER_AREA)
+        #mg = cv2.resize(img, (imgHeight, imgWidth), interpolation=cv2.INTER_AREA)
         ###scale image channels
-        img = scale_img_channels(img, IMG_CHANNELS)
+        img = scale_img_channels(img, imgChannels)
         X_test[n] = img
         
     print('Done!')
-    return train_ids, test_ids, X_train, Y_train, X_test, sizes_test
+    return train_ids, test_ids, val_ids, X_train, Y_train, X_val, Y_val, X_test, sizes_test
 
 
 

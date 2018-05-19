@@ -17,8 +17,8 @@ from keras.preprocessing.image import ImageDataGenerator
 from skimage.transform import resize
 
 # Build U-Net model
-def build_model(IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS):   
-    inputs = Input((IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS))
+def build_model(imgHeight, imgWidth, imgChannels):   
+    inputs = Input((imgHeight, imgWidth, imgChannels))
     s = Lambda(lambda x: x / 255) (inputs)
 
     c1 = Conv2D(8, (3, 3), activation='relu', padding='same') (s)
@@ -69,9 +69,9 @@ def build_model(IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS):
 
     
 #Fit model
-def fit_model(model, MODEL_DIR, X_train, Y_train):
+def fit_model(model, modelDir, X_train, Y_train):
     earlystopper = EarlyStopping(patience=5, verbose=1)
-    currentModelDir = os.path.join(MODEL_DIR, datetime.now().strftime("%Y-%m-%d %H:%M:%S"),)
+    currentModelDir = os.path.join(modelDir, datetime.now().strftime("%Y-%m-%d %H:%M:%S"),)
     if not os.path.exists(currentModelDir):
         os.makedirs(currentModelDir)
     filepath = os.path.join(currentModelDir, 'epoch{epoch:04d}-val_loss{val_loss:.2f}.h5')
@@ -91,53 +91,48 @@ def fit_model(model, MODEL_DIR, X_train, Y_train):
 
     
 #Fit model with generator for augmentation    
-def fit_model_generator(model, MODEL_DIR, ROOT_DIR, X_train, Y_train):
+def fit_model_generator(model, modelDir, rootDir, X_train, Y_train, X_val, Y_val):
     seed = 1
     batch_size = 8
     
-    data_gen_args = dict(featurewise_center=True,
-                     featurewise_std_normalization=True,
-                     rotation_range=90.,
-                     width_shift_range=0.1,
-                     height_shift_range=0.1,
-                     zoom_range=0.2)
-
+    data_gen_args = dict(horizontal_flip=True)
+    
     image_datagen = ImageDataGenerator(**data_gen_args)
-    mask_datagen = ImageDataGenerator(**data_gen_args)
-
-    
+    mask_datagen = ImageDataGenerator(**data_gen_args)    
     image_datagen.fit(X_train, seed = seed)
-    mask_datagen.fit(Y_train, seed = seed)
-    
-    augment_dir = os.path.join(ROOT_DIR, "augmented_images", datetime.now().strftime("%Y-%m-%d %H:%M:%S"),)
+    mask_datagen.fit(Y_train, seed = seed)    
+    #augment_dir = os.path.join(ROOT_DIR, "augmented_images", datetime.now().strftime("%Y-%m-%d %H:%M:%S"),)
     #if not os.path.exists(augment_dir):
-        #os.makedirs(augment_dir)
-    
+        #os.makedirs(augment_dir)    
     image_generator = image_datagen.flow(X_train, batch_size=batch_size, shuffle=True, seed=seed, save_to_dir=None)
     mask_generator = mask_datagen.flow(Y_train, batch_size=batch_size, shuffle=True, seed=seed, save_to_dir=None)
-
     # combine generators into one which yields image and masks
     train_generator = zip(image_generator, mask_generator)
-    
-    earlystopper = EarlyStopping(patience=5, verbose=1)
-    currentModelDir = os.path.join(MODEL_DIR, datetime.now().strftime("%Y-%m-%d %H:%M:%S"),)
+
+    #callbacks
+    earlystopper = EarlyStopping(patience=10, verbose=1)
+    currentModelDir = os.path.join(modelDir, datetime.now().strftime("%Y-%m-%d %H:%M:%S"),)
     if not os.path.exists(currentModelDir):
         os.makedirs(currentModelDir)
     filepath = os.path.join(currentModelDir, 'epoch{epoch:04d}-val_loss{val_loss:.2f}.h5')
-    checkpointer = ModelCheckpoint(filepath, verbose=1, save_best_only=True)
-    model.fit_generator(steps_per_epoch=len(X_train)/batch_size,
+    checkpointer = ModelCheckpoint(filepath, verbose=1, save_best_only=False)
+    
+    results = model.fit_generator(steps_per_epoch=len(X_train)/batch_size,
                         generator=train_generator,
-                        epochs=60,
-                        callbacks=[earlystopper, checkpointer],
+                        epochs=30,
+                        callbacks=[checkpointer],
                         use_multiprocessing=True,
-                        validation_data= ###TODO: extra_data as validation data###)
+                        validation_data=(X_val, Y_val),
+                        validation_steps=1)
 
 #Make predictions
 #Predict on train, val and test
-def make_predictions(model_path, X_train, X_test, sizes_test):
+def make_predictions(model_path, X_train, X_val, X_test, sizes_test):
     model = load_model(model_path, custom_objects={'dice_coef': utils.dice_coef})
-    preds_train = model.predict(X_train[:int(X_train.shape[0]*0.9)], verbose=1)
-    preds_val = model.predict(X_train[int(X_train.shape[0]*0.9):], verbose=1)
+    #preds_train = model.predict(X_train[:int(X_train.shape[0]*0.9)], verbose=1)
+    #preds_val = model.predict(X_train[int(X_train.shape[0]*0.9):], verbose=1)
+    preds_train = model.predict(X_train, verbose=1)
+    preds_val = model.predict(X_val, verbose=1)
     preds_test = model.predict(X_test, verbose=1)
 
     # Threshold predictions
