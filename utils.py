@@ -10,20 +10,34 @@ from keras import backend as K
 
 smooth = 1.
 
-
-def get_data(trainPath, valPath, testPath, imgHeight, imgWidth, imgChannels):
-    # Get train and test IDs
-    train_ids = next(os.walk(trainPath))[1]
-    val_ids = next(os.walk(valPath))[1]
-    test_ids = next(os.walk(testPath))[1]
-
-    # Get and resize train images and masks
-    X_train = np.zeros((len(train_ids), imgHeight, imgWidth, imgChannels), dtype=np.uint8)
-    Y_train = np.zeros((len(train_ids), imgHeight, imgWidth, 1), dtype=np.bool)
-    print('Getting and resizing train images and masks ... ')
+###
+#loads a dataset, resizes it and scales image channels
+#datasetPath: path to the dataset
+#imgWidth: width the images should be resized to
+#imgHeight: height the images should be resized to
+#imgChannels: defines if images are rgb or grayscale
+#testData: boolean value, if the dataset contains test images and therefore does not contain masks
+##
+#return:
+#ids: image ids
+#images: numpy array with images' data
+#masks: numpy array with masks' data
+#sizes_test: numpy array that contains original sizes of the images to resize the masks for correct submission
+###
+def load_dataset(datasetPath, imgWidth, imgHeight, imgChannels, testData):
+    # Get image IDs
+    ids = next(os.walk(datasetPath))[1]    
+    #list that saves original sizes of test images
+    if testData:        
+        sizes_test = []          
+    # Get and resize images and masks(if withMasks == true)
+    images = np.zeros((len(ids), imgHeight, imgWidth, imgChannels), dtype=np.uint8)
+    if not testData:
+        masks = np.zeros((len(ids), imgHeight, imgWidth, 1), dtype=np.bool)
+    print('Getting and resizing images ... ')
     sys.stdout.flush()
-    for n, id_ in tqdm(enumerate(train_ids), total=len(train_ids)):
-        path = trainPath + id_
+    for n, id_ in tqdm(enumerate(ids), total=len(ids)):
+        path = datasetPath + id_
         try:
             ###with skimage
             img = imread(path + '/images/' + id_ + '.png')[:,:,:imgChannels]
@@ -32,80 +46,31 @@ def get_data(trainPath, valPath, testPath, imgHeight, imgWidth, imgChannels):
         except:
             print(id_)
             continue
+        if testData:
+            sizes_test.append([img.shape[0], img.shape[1]])
         ###resize with skimage.transform
         img = resize(img, (imgHeight, imgWidth), mode='constant', preserve_range=True)
         ###resize with cv2
         #img = cv2.resize(img, (imgHeight, imgWidth), interpolation=cv2.INTER_AREA)
         ###scale image channels
         img = scale_img_channels(img, imgChannels)
-        X_train[n] = img
-        mask = np.zeros((imgHeight, imgWidth, 1), dtype=np.bool)
-        for mask_file in next(os.walk(path + '/masks/'))[2]:
-            mask_ = imread(path + '/masks/' + mask_file, 0)
-            #mask_ = cv2.imread(path + '/masks/' + mask_file, 0)
-            mask_ = np.expand_dims(resize(mask_, (imgHeight, imgWidth), mode='constant', 
-                                      preserve_range=True), axis=-1)
-            #mask_ = np.expand_dims(cv2.resize(mask_, (imgHeight, imgWidth), interpolation=cv2.INTER_AREA), axis=-1)
-            mask = np.maximum(mask, mask_)
-        Y_train[n] = mask
-    
-    # Get and resize val images and masks
-    X_val = np.zeros((len(val_ids), imgHeight, imgWidth, imgChannels), dtype=np.uint8)
-    Y_val = np.zeros((len(val_ids), imgHeight, imgWidth, 1), dtype=np.bool)
-    print('Getting and resizing val images and masks ... ')
-    sys.stdout.flush()
-    for n, id_ in tqdm(enumerate(val_ids), total=len(val_ids)):
-        path = valPath + id_
-        try:
-            ###with skimage
-            img = imread(path + '/images/' + id_ + '.png')[:,:,:imgChannels]
-            ###with cv2
-            #img = cv2.imread(path + '/images/' + id_ + '.png')[:,:,:imgChannels]
-        except:
-            print(id_)
-            continue
-        ###resize with skimage.transform
-        img = resize(img, (imgHeight, imgWidth), mode='constant', preserve_range=True)
-        ###resize with cv2
-        #img = cv2.resize(img, (imgHeight, imgWidth), interpolation=cv2.INTER_AREA)
-        ###scale image channels
-        img = scale_img_channels(img, imgChannels)
-        X_val[n] = img
-        mask = np.zeros((imgHeight, imgWidth, 1), dtype=np.bool)
-        for mask_file in next(os.walk(path + '/masks/'))[2]:
-            mask_ = imread(path + '/masks/' + mask_file, 0)
-            #mask_ = cv2.imread(path + '/masks/' + mask_file, 0)
-            mask_ = np.expand_dims(resize(mask_, (imgHeight, imgWidth), mode='constant', 
-                                      preserve_range=True), axis=-1)
-            #mask_ = np.expand_dims(cv2.resize(mask_, (imgHeight, imgWidth), interpolation=cv2.INTER_AREA), axis=-1)
-            mask = np.maximum(mask, mask_)
-        Y_val[n] = mask
-    
-    # Get and resize test images
-    X_test = np.zeros((len(test_ids), imgHeight, imgWidth, imgChannels), dtype=np.uint8)
-    sizes_test = []
-    print('Getting and resizing test images ... ')
-    sys.stdout.flush()
-    for n, id_ in tqdm(enumerate(test_ids), total=len(test_ids)):
-        path = testPath + id_
-        try:
-            img = imread(path + '/images/' + id_ + '.png')[:,:,:imgChannels]
-            #img = cv2.imread(path + '/images/' + id_ + '.png')[:,:,:imgChannels]
-        except:
-            print(id_)
-        sizes_test.append([img.shape[0], img.shape[1]])
-        ###resize with skimage.transform
-        img = resize(img, (imgHeight, imgWidth), mode='constant', preserve_range=True)
-        ###resize with cv2
-        #mg = cv2.resize(img, (imgHeight, imgWidth), interpolation=cv2.INTER_AREA)
-        ###scale image channels
-        img = scale_img_channels(img, imgChannels)
-        X_test[n] = img
-        
+        images[n] = img
+        if not testData:
+            mask = np.zeros((imgHeight, imgWidth, 1), dtype=np.bool)
+            for mask_file in next(os.walk(path + '/masks/'))[2]:
+                mask_ = imread(path + '/masks/' + mask_file, 0)
+                #mask_ = cv2.imread(path + '/masks/' + mask_file, 0)
+                mask_ = np.expand_dims(resize(mask_, (imgHeight, imgWidth), mode='constant', 
+                                          preserve_range=True), axis=-1)
+                #mask_ = np.expand_dims(cv2.resize(mask_, (imgHeight, imgWidth), interpolation=cv2.INTER_AREA), axis=-1)
+                mask = np.maximum(mask, mask_)
+            masks[n] = mask
+            
     print('Done!')
-    return train_ids, test_ids, val_ids, X_train, Y_train, X_val, Y_val, X_test, sizes_test
-
-
+    if testData:
+        return ids, images, sizes_test
+    else:
+        return ids, images, masks
 
 def scale_img_channels(an_img, img_channels):
     for i in range(img_channels):
