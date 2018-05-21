@@ -9,7 +9,7 @@ from skimage.morphology import label
 from keras import backend as K
 
 smooth = 1.
-
+    
 ###
 #loads a dataset, resizes it and scales image channels
 #datasetPath: path to the dataset
@@ -26,7 +26,7 @@ smooth = 1.
 ###
 def load_dataset(datasetPath, imgWidth, imgHeight, imgChannels, testData):
     # Get image IDs
-    ids = next(os.walk(datasetPath))[1]    
+    ids = next(os.walk(datasetPath))[1]
     #list that saves original sizes of test images
     if testData:        
         sizes_test = []          
@@ -41,13 +41,15 @@ def load_dataset(datasetPath, imgWidth, imgHeight, imgChannels, testData):
         try:
             ###with skimage
             img = imread(path + '/images/' + id_ + '.png')[:,:,:imgChannels]
+            if testData:
+                sizes_test.append([img.shape[0], img.shape[1]])
             ###with cv2
             #img = cv2.imread(path + '/images/' + id_ + '.png')[:,:,:imgChannels]
         except:
             print(id_)
+            ids.remove(id_)
             continue
-        if testData:
-            sizes_test.append([img.shape[0], img.shape[1]])
+        
         ###resize with skimage.transform
         img = resize(img, (imgHeight, imgWidth), mode='constant', preserve_range=True)
         ###resize with cv2
@@ -55,6 +57,7 @@ def load_dataset(datasetPath, imgWidth, imgHeight, imgChannels, testData):
         ###scale image channels
         img = scale_img_channels(img, imgChannels)
         images[n] = img
+
         if not testData:
             mask = np.zeros((imgHeight, imgWidth, 1), dtype=np.bool)
             for mask_file in next(os.walk(path + '/masks/'))[2]:
