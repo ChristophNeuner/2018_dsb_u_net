@@ -30,12 +30,14 @@ def load_dataset(datasetPath, imgWidth, imgHeight, imgChannels, testData):
     #list that saves original sizes of test images
     if testData:        
         sizes_test = []          
-    # Get and resize images and masks(if withMasks == true)
+    # Get and resize images and masks
     images = np.zeros((len(ids), imgHeight, imgWidth, imgChannels), dtype=np.uint8)
     if not testData:
         masks = np.zeros((len(ids), imgHeight, imgWidth, 1), dtype=np.bool)
     print('Getting and resizing images ... ')
     sys.stdout.flush()
+
+    failedIds = []
     for n, id_ in tqdm(enumerate(ids), total=len(ids)):
         path = datasetPath + id_
         try:
@@ -47,7 +49,7 @@ def load_dataset(datasetPath, imgWidth, imgHeight, imgChannels, testData):
             #img = cv2.imread(path + '/images/' + id_ + '.png')[:,:,:imgChannels]
         except:
             print(id_)
-            ids.remove(id_)
+            failedIds.append(id_)    
             continue
         
         ###resize with skimage.transform
@@ -68,7 +70,18 @@ def load_dataset(datasetPath, imgWidth, imgHeight, imgChannels, testData):
                 #mask_ = np.expand_dims(cv2.resize(mask_, (imgHeight, imgWidth), interpolation=cv2.INTER_AREA), axis=-1)
                 mask = np.maximum(mask, mask_)
             masks[n] = mask
-            
+    
+    if(len(failedIds) == 0):
+        print('no failed ids')
+    else:
+        for n, failedId in tqdm(enumerate(failedIds), total=len(failedIds)):
+            index = ids.index(failedId)
+            ids.remove(failedId)
+            images = np.delete(images, index, 0)
+            if not testData:
+                masks = np.delete(masks, index, 0)
+
+
     print('Done!')
     if testData:
         return ids, images, sizes_test
