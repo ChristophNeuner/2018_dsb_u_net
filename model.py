@@ -12,6 +12,7 @@ from keras.layers.merge import concatenate
 from keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
 from keras import backend as K
 from keras.preprocessing.image import ImageDataGenerator
+from keras import metrics
 
 #import cv2
 from skimage.transform import resize
@@ -63,7 +64,7 @@ def build_model(imgHeight, imgWidth, imgChannels):
     outputs = Conv2D(1, (1, 1), activation='sigmoid') (c9)
 
     model = Model(inputs=[inputs], outputs=[outputs])
-    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=[utils.dice_coef])
+    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=[utils.dice_coef, metrics.binary_accuracy])
     model.summary()
     return model
 
@@ -90,48 +91,7 @@ def fit_model(model, modelDir, X_train, Y_train):
                         callbacks=[earlystopper, checkpointer])
 
     
-"""
-#Fit model with generator for augmentation    
-def fit_model_generator(model, modelDir, rootDir, X_train, Y_train, X_val, Y_val):
-    #augment_dir = os.path.join(ROOT_DIR, "augmented_images", datetime.now().strftime("%Y-%m-%d %H:%M:%S"),)
-    #if not os.path.exists(augment_dir):
-        #os.makedirs(augment_dir)    
-    seed = 1
-    batchSize = 4
-    
-    trainDataGenArgs = dict(horizontal_flip=True,
-                     featurewise_center=True,
-                     featurewise_std_normalization=True,
-                     rotation_range=90.,
-                     width_shift_range=0.1,
-                     height_shift_range=0.1,
-                     zoom_range=0.2)    
-    trainDatagen = ImageDataGenerator(**trainDataGenArgs)
-    trainDatagen.fit(X_train, augment=True, seed = seed)
-    trainGenerator = trainDatagen.flow(x = X_train, y = Y_train, batch_size=batchSize, shuffle=True, seed=seed, save_to_dir=None)
-    
-    valDataGenArgs = dict()   
-    valDatagen = ImageDataGenerator(**valDataGenArgs)   
-    valDatagen.fit(X_val, seed = seed)
-    valGenerator = valDatagen.flow(x=X_val,y=Y_val, batch_size=batchSize, shuffle=True, seed=seed)
-    
-    #callbacks
-    earlystopper = EarlyStopping(patience=10, verbose=1, monitor='val_loss')
-    currentModelDir = os.path.join(modelDir, datetime.now().strftime("%Y-%m-%d %H:%M:%S"),)
-    if not os.path.exists(currentModelDir):
-        os.makedirs(currentModelDir)
-    filepath = os.path.join(currentModelDir, 'epoch{epoch:04d}-val_loss{val_loss:.2f}.h5')
-    checkpointer = ModelCheckpoint(filepath, verbose=1, save_best_only=True)
-    
-    results = model.fit_generator(steps_per_epoch=len(X_train)/batchSize,
-                        generator=trainGenerator,
-                        epochs=60,
-                        callbacks=[checkpointer, earlystopper],
-                        use_multiprocessing=True,
-                        validation_data=valGenerator,
-                        validation_steps=len(X_val)/batchSize)
-    
-"""   
+
 #Fit model with generator for augmentation    
 def fit_model_generator(model, modelDir, rootDir, X_train, Y_train, X_val, Y_val):
     #augment_dir = os.path.join(ROOT_DIR, "augmented_images", datetime.now().strftime("%Y-%m-%d %H:%M:%S"),)
