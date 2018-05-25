@@ -90,8 +90,12 @@ def fit_model(model, modelDir, X_train, Y_train):
                         callbacks=[earlystopper, checkpointer])
 
     
+"""
 #Fit model with generator for augmentation    
 def fit_model_generator(model, modelDir, rootDir, X_train, Y_train, X_val, Y_val):
+    #augment_dir = os.path.join(ROOT_DIR, "augmented_images", datetime.now().strftime("%Y-%m-%d %H:%M:%S"),)
+    #if not os.path.exists(augment_dir):
+        #os.makedirs(augment_dir)    
     seed = 1
     batchSize = 4
     
@@ -101,30 +105,16 @@ def fit_model_generator(model, modelDir, rootDir, X_train, Y_train, X_val, Y_val
                      rotation_range=90.,
                      width_shift_range=0.1,
                      height_shift_range=0.1,
-                     zoom_range=0.2)
-
-    valDataGenArgs = dict()
+                     zoom_range=0.2)    
+    trainDatagen = ImageDataGenerator(**trainDataGenArgs)
+    trainDatagen.fit(X_train, augment=True, seed = seed)
+    trainGenerator = trainDatagen.flow(x = X_train, y = Y_train, batch_size=batchSize, shuffle=True, seed=seed, save_to_dir=None)
     
-    trainImageDatagen = ImageDataGenerator(**trainDataGenArgs)
-    trainMaskDatagen = ImageDataGenerator(**trainDataGenArgs)
-    valImageDatagen = ImageDataGenerator(**valDataGenArgs)
-    valMaskDatagen = ImageDataGenerator(**valDataGenArgs)
-    trainImageDatagen.fit(X_train, seed = seed)
-    trainMaskDatagen.fit(Y_train, seed = seed)
-    valImageDatagen.fit(X_val, seed = seed)
-    valMaskDatagen.fit(Y_val, seed=seed)
-    #augment_dir = os.path.join(ROOT_DIR, "augmented_images", datetime.now().strftime("%Y-%m-%d %H:%M:%S"),)
-    #if not os.path.exists(augment_dir):
-        #os.makedirs(augment_dir)    
-    trainImageGenerator = trainImageDatagen.flow(X_train, batch_size=batchSize, shuffle=True, seed=seed, save_to_dir=None)
-    trainMaskGenerator = trainMaskDatagen.flow(Y_train, batch_size=batchSize, shuffle=True, seed=seed, save_to_dir=None)
-    valImageGenerator = valImageDatagen.flow(X_val, batch_size=batchSize, shuffle=True, seed=seed)
-    valMaskGenerator = valMaskDatagen.flow(Y_val, batch_size=batchSize, shuffle=True, seed=seed)
-
-    # combine generators into one which yields image and masks
-    trainGenerator = zip(trainImageGenerator, trainMaskGenerator)
-    valGenerator=zip(valImageGenerator, valMaskGenerator)
-
+    valDataGenArgs = dict()   
+    valDatagen = ImageDataGenerator(**valDataGenArgs)   
+    valDatagen.fit(X_val, seed = seed)
+    valGenerator = valDatagen.flow(x=X_val,y=Y_val, batch_size=batchSize, shuffle=True, seed=seed)
+    
     #callbacks
     earlystopper = EarlyStopping(patience=10, verbose=1, monitor='val_loss')
     currentModelDir = os.path.join(modelDir, datetime.now().strftime("%Y-%m-%d %H:%M:%S"),)
@@ -140,6 +130,59 @@ def fit_model_generator(model, modelDir, rootDir, X_train, Y_train, X_val, Y_val
                         use_multiprocessing=True,
                         validation_data=valGenerator,
                         validation_steps=len(X_val)/batchSize)
+    
+"""   
+#Fit model with generator for augmentation    
+def fit_model_generator(model, modelDir, rootDir, X_train, Y_train, X_val, Y_val):
+    #augment_dir = os.path.join(ROOT_DIR, "augmented_images", datetime.now().strftime("%Y-%m-%d %H:%M:%S"),)
+    #if not os.path.exists(augment_dir):
+        #os.makedirs(augment_dir)    
+    seed = 1
+    batchSize = 4
+    
+    trainDataGenArgs = dict(horizontal_flip=True,
+                     featurewise_center=True,
+                     featurewise_std_normalization=True,
+                     rotation_range=90.,
+                     width_shift_range=0.1,
+                     height_shift_range=0.1,
+                     zoom_range=0.2)    
+    trainImageDatagen = ImageDataGenerator(**trainDataGenArgs)
+    trainMaskDatagen = ImageDataGenerator(**trainDataGenArgs)
+    trainImageDatagen.fit(X_train, seed = seed)
+    trainMaskDatagen.fit(Y_train, seed = seed)
+    trainImageGenerator = trainImageDatagen.flow(X_train, batch_size=batchSize, shuffle=True, seed=seed, save_to_dir=None)
+    trainMaskGenerator = trainMaskDatagen.flow(Y_train, batch_size=batchSize, shuffle=True, seed=seed, save_to_dir=None)
+    #combine generators into one which yields image and masks
+    trainGenerator = zip(trainImageGenerator, trainMaskGenerator)
+    
+    valDataGenArgs = dict()   
+    valImageDatagen = ImageDataGenerator(**valDataGenArgs)
+    valMaskDatagen = ImageDataGenerator(**valDataGenArgs)   
+    valImageDatagen.fit(X_val, seed = seed)
+    valMaskDatagen.fit(Y_val, seed=seed)
+    valImageGenerator = valImageDatagen.flow(X_val, batch_size=batchSize, shuffle=True, seed=seed)
+    valMaskGenerator = valMaskDatagen.flow(Y_val, batch_size=batchSize, shuffle=True, seed=seed)
+    #combine generators into one which yields image and masks
+    valGenerator=zip(valImageGenerator, valMaskGenerator)
+    
+    #callbacks
+    earlystopper = EarlyStopping(patience=10, verbose=1, monitor='val_loss')
+    currentModelDir = os.path.join(modelDir, datetime.now().strftime("%Y-%m-%d %H:%M:%S"),)
+    if not os.path.exists(currentModelDir):
+        os.makedirs(currentModelDir)
+    filepath = os.path.join(currentModelDir, 'epoch{epoch:04d}-val_loss{val_loss:.2f}.h5')
+    checkpointer = ModelCheckpoint(filepath, verbose=1, save_best_only=True)
+    
+    results = model.fit_generator(steps_per_epoch=len(X_train)/batchSize,
+                        generator=trainGenerator,
+                        epochs=60,
+                        callbacks=[checkpointer, earlystopper],
+                        use_multiprocessing=True,
+                        validation_data=valGenerator,
+                        validation_steps=len(X_val)/batchSize)
+
+    
 #Make predictions
 #Predict on train, val and test
 def make_predictions(model_path, X_train, X_val, X_test, sizes_test):
