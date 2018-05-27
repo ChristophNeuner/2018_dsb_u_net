@@ -9,13 +9,121 @@ from keras.layers.core import Lambda
 from keras.layers.convolutional import Conv2D, Conv2DTranspose
 from keras.layers.pooling import MaxPooling2D
 from keras.layers.merge import concatenate
-from keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
+from keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau, TensorBoard
 from keras import backend as K
 from keras.preprocessing.image import ImageDataGenerator
 from keras import metrics
 
 #import cv2
 from skimage.transform import resize
+
+
+#Fit model
+def fit_model(model, modelDir, X_train, Y_train):
+    batchSize = 8
+    earlystopper = EarlyStopping(patience=5, verbose=1)
+    currentModelDir = os.path.join(modelDir, datetime.now().strftime("%Y-%m-%d %H:%M:%S"),)
+    if not os.path.exists(currentModelDir):
+        os.makedirs(currentModelDir)
+    filepath = os.path.join(currentModelDir, 'epoch{epoch:04d}-val_loss{val_loss:.2f}.h5')
+    checkpointer = ModelCheckpoint(filepath, verbose=1, save_best_only=True)
+    tb = TensorBoard(log_dir=currentModelDir, histogram_freq=0, batch_size=batchSize, write_graph=True, write_grads=False, write_images=False, embeddings_freq=0, embeddings_layer_names=None, embeddings_metadata=None)
+    """
+    reduceLrOnPlateau = ReduceLROnPlateau(monitor= 'val_loss',
+                                            factor= 0.5,
+                                            patience= 5,
+                                            verbose= 1,
+                                            mode= 'auto',
+                                            epsilon= 0.0001,
+                                            cooldown= 5,
+                                            min_lr= 1e-7)
+                                           """
+    results = model.fit(X_train, Y_train, validation_split=0.1, batch_size=batchSize, epochs=60, 
+                        callbacks=[earlystopper, checkpointer, tb])
+
+    
+
+#Fit model with generator for augmentation
+### NOT WORKING!!!
+def fit_model_generator(model, modelDir, rootDir, X_train, Y_train, X_val, Y_val):
+    #augment_dir = os.path.join(ROOT_DIR, "augmented_images", datetime.now().strftime("%Y-%m-%d %H:%M:%S"),)
+    #if not os.path.exists(augment_dir):
+        #os.makedirs(augment_dir)    
+    seed = 1
+    batchSize = 4
+    
+    trainDataGenArgs = dict(horizontal_flip=True,
+                     featurewise_center=True,
+                     featurewise_std_normalization=True,
+                     rotation_range=90.,
+                     width_shift_range=0.1,
+                     height_shift_range=0.1,
+                     zoom_range=0.2)    
+    trainImageDatagen = ImageDataGenerator(**trainDataGenArgs)
+    trainMaskDatagen = ImageDataGenerator(**trainDataGenArgs)
+    trainImageDatagen.fit(X_train, seed = seed)
+    trainMaskDatagen.fit(Y_train, seed = seed)
+    trainImageGenerator = trainImageDatagen.flow(X_train, batch_size=batchSize, shuffle=True, seed=seed, save_to_dir=None)
+    trainMaskGenerator = trainMaskDatagen.flow(Y_train, batch_size=batchSize, shuffle=True, seed=seed, save_to_dir=None)
+    #combine generators into one which yields image and masks
+    trainGenerator = zip(trainImageGenerator, trainMaskGenerator)
+    
+    valDataGenArgs = dict()   
+    valImageDatagen = ImageDataGenerator(**valDataGenArgs)
+    valMaskDatagen = ImageDataGenerator(**valDataGenArgs)   
+    valImageDatagen.fit(X_val, seed = seed)
+    valMaskDatagen.fit(Y_val, seed=seed)
+    valImageGenerator = valImageDatagen.flow(X_val, batch_size=batchSize, shuffle=True, seed=seed)
+    valMaskGenerator = valMaskDatagen.flow(Y_val, batch_size=batchSize, shuffle=True, seed=seed)
+    #combine generators into one which yields image and masks
+    valGenerator=zip(valImageGenerator, valMaskGenerator)
+    
+    
+    #callbacks
+    earlystopper = EarlyStopping(patience=10, verbose=1, monitor='val_loss')
+    currentModelDir = os.path.join(modelDir, datetime.now().strftime("%Y-%m-%d %H:%M:%S"),)
+    if not os.path.exists(currentModelDir):
+        os.makedirs(currentModelDir)
+    filepath = os.path.join(currentModelDir, 'epoch{epoch:04d}-val_loss{val_loss:.2f}.h5')
+    checkpointer = ModelCheckpoint(filepath, verbose=1, save_best_only=True)
+    
+    results = model.fit_generator(steps_per_epoch=len(X_train)/batchSize,
+                        generator=trainGenerator,
+                        epochs=60,
+                        callbacks=[checkpointer, earlystopper],
+                        use_multiprocessing=True,
+                        validation_data=valGenerator,
+                        validation_steps=len(X_val)/batchSize)
+
+    
+#Make predictions
+#Predict on train, val and test
+def make_predictions(model_path, X_train, X_val, X_test, sizes_test):
+    model = load_model(model_path, custom_objects={'dice_coef': utils.dice_coef})
+    #preds_train = model.predict(X_train[:int(X_train.shape[0]*0.9)], verbose=1)
+    #preds_val = model.predict(X_train[int(X_train.shape[0]*0.9):], verbose=1)
+    preds_train = model.predict(X_train, verbose=1)
+    preds_val = model.predict(X_val, verbose=1)
+    preds_test = model.predict(X_test, verbose=1)
+
+    # Threshold predictions
+    preds_train_t = (preds_train > 0.5).astype(np.uint8)
+    preds_val_t = (preds_val > 0.5).astype(np.uint8)
+    preds_test_t = (preds_test > 0.5).astype(np.uint8)
+
+    # Create list of upsampled test masks
+    preds_test_upsampled = []
+    for i in range(len(preds_test)):
+        ###skimage
+        preds_test_upsampled.append(resize(np.squeeze(preds_test[i]), 
+                                           (sizes_test[i][0], sizes_test[i][1]), 
+                                           mode='constant', preserve_range=True))
+        ###cv2
+        #preds_test_upsampled.append(cv2.resize(np.squeeze(preds_test[i]),
+                                                #(sizes_test[i][0], sizes_test[i][1]),
+                                                #interpolation=cv2.INTER_AREA))
+    return preds_train_t, preds_val_t, preds_test_upsampled
+
 
 # Build U-Net model
 def build_model(imgHeight, imgWidth, imgChannels):   
@@ -67,106 +175,3 @@ def build_model(imgHeight, imgWidth, imgChannels):
     model.compile(optimizer='adam', loss='binary_crossentropy', metrics=[utils.dice_coef, metrics.binary_accuracy])
     model.summary()
     return model
-
-    
-#Fit model
-def fit_model(model, modelDir, X_train, Y_train):
-    earlystopper = EarlyStopping(patience=5, verbose=1)
-    currentModelDir = os.path.join(modelDir, datetime.now().strftime("%Y-%m-%d %H:%M:%S"),)
-    if not os.path.exists(currentModelDir):
-        os.makedirs(currentModelDir)
-    filepath = os.path.join(currentModelDir, 'epoch{epoch:04d}-val_loss{val_loss:.2f}.h5')
-    checkpointer = ModelCheckpoint(filepath, verbose=1, save_best_only=True)
-    """
-    reduceLrOnPlateau = ReduceLROnPlateau(monitor= 'val_loss',
-                                            factor= 0.5,
-                                            patience= 5,
-                                            verbose= 1,
-                                            mode= 'auto',
-                                            epsilon= 0.0001,
-                                            cooldown= 5,
-                                            min_lr= 1e-7)
-                                           """
-    results = model.fit(X_train, Y_train, validation_split=0.1, batch_size=8, epochs=60, 
-                        callbacks=[earlystopper, checkpointer])
-
-    
-
-#Fit model with generator for augmentation    
-def fit_model_generator(model, modelDir, rootDir, X_train, Y_train, X_val, Y_val):
-    #augment_dir = os.path.join(ROOT_DIR, "augmented_images", datetime.now().strftime("%Y-%m-%d %H:%M:%S"),)
-    #if not os.path.exists(augment_dir):
-        #os.makedirs(augment_dir)    
-    seed = 1
-    batchSize = 4
-    
-    trainDataGenArgs = dict(horizontal_flip=True,
-                     featurewise_center=True,
-                     featurewise_std_normalization=True,
-                     rotation_range=90.,
-                     width_shift_range=0.1,
-                     height_shift_range=0.1,
-                     zoom_range=0.2)    
-    trainImageDatagen = ImageDataGenerator(**trainDataGenArgs)
-    trainMaskDatagen = ImageDataGenerator(**trainDataGenArgs)
-    trainImageDatagen.fit(X_train, seed = seed)
-    trainMaskDatagen.fit(Y_train, seed = seed)
-    trainImageGenerator = trainImageDatagen.flow(X_train, batch_size=batchSize, shuffle=True, seed=seed, save_to_dir=None)
-    trainMaskGenerator = trainMaskDatagen.flow(Y_train, batch_size=batchSize, shuffle=True, seed=seed, save_to_dir=None)
-    #combine generators into one which yields image and masks
-    trainGenerator = zip(trainImageGenerator, trainMaskGenerator)
-    
-    valDataGenArgs = dict()   
-    valImageDatagen = ImageDataGenerator(**valDataGenArgs)
-    valMaskDatagen = ImageDataGenerator(**valDataGenArgs)   
-    valImageDatagen.fit(X_val, seed = seed)
-    valMaskDatagen.fit(Y_val, seed=seed)
-    valImageGenerator = valImageDatagen.flow(X_val, batch_size=batchSize, shuffle=True, seed=seed)
-    valMaskGenerator = valMaskDatagen.flow(Y_val, batch_size=batchSize, shuffle=True, seed=seed)
-    #combine generators into one which yields image and masks
-    valGenerator=zip(valImageGenerator, valMaskGenerator)
-    
-    #callbacks
-    earlystopper = EarlyStopping(patience=10, verbose=1, monitor='val_loss')
-    currentModelDir = os.path.join(modelDir, datetime.now().strftime("%Y-%m-%d %H:%M:%S"),)
-    if not os.path.exists(currentModelDir):
-        os.makedirs(currentModelDir)
-    filepath = os.path.join(currentModelDir, 'epoch{epoch:04d}-val_loss{val_loss:.2f}.h5')
-    checkpointer = ModelCheckpoint(filepath, verbose=1, save_best_only=True)
-    
-    results = model.fit_generator(steps_per_epoch=len(X_train)/batchSize,
-                        generator=trainGenerator,
-                        epochs=60,
-                        callbacks=[checkpointer, earlystopper],
-                        use_multiprocessing=True,
-                        validation_data=valGenerator,
-                        validation_steps=len(X_val)/batchSize)
-
-    
-#Make predictions
-#Predict on train, val and test
-def make_predictions(model_path, X_train, X_val, X_test, sizes_test):
-    model = load_model(model_path, custom_objects={'dice_coef': utils.dice_coef})
-    #preds_train = model.predict(X_train[:int(X_train.shape[0]*0.9)], verbose=1)
-    #preds_val = model.predict(X_train[int(X_train.shape[0]*0.9):], verbose=1)
-    preds_train = model.predict(X_train, verbose=1)
-    preds_val = model.predict(X_val, verbose=1)
-    preds_test = model.predict(X_test, verbose=1)
-
-    # Threshold predictions
-    preds_train_t = (preds_train > 0.5).astype(np.uint8)
-    preds_val_t = (preds_val > 0.5).astype(np.uint8)
-    preds_test_t = (preds_test > 0.5).astype(np.uint8)
-
-    # Create list of upsampled test masks
-    preds_test_upsampled = []
-    for i in range(len(preds_test)):
-        ###skimage
-        preds_test_upsampled.append(resize(np.squeeze(preds_test[i]), 
-                                           (sizes_test[i][0], sizes_test[i][1]), 
-                                           mode='constant', preserve_range=True))
-        ###cv2
-        #preds_test_upsampled.append(cv2.resize(np.squeeze(preds_test[i]),
-                                                #(sizes_test[i][0], sizes_test[i][1]),
-                                                #interpolation=cv2.INTER_AREA))
-    return preds_train_t, preds_val_t, preds_test_upsampled
