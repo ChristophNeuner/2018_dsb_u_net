@@ -2,7 +2,8 @@ import os
 import numpy as np
 import sys
 #import cv2
-from tqdm import tqdm
+#from tqdm import tqdm
+from tqdm import tqdm_notebook as tqdm
 from skimage.io import imread, imshow, imread_collection, concatenate_images
 from skimage.transform import resize
 from skimage.morphology import label
@@ -63,7 +64,7 @@ def load_dataset(datasetPath, imgWidth, imgHeight, imgChannels, testData):
         if not testData:
             mask = np.zeros((imgHeight, imgWidth, 1), dtype=np.bool)
             for mask_file in next(os.walk(path + '/masks/'))[2]:
-                mask_ = imread(path + '/masks/' + mask_file, 0)
+                mask_ = imread(path + '/masks/' + mask_file, as_gray = False)
                 #mask_ = cv2.imread(path + '/masks/' + mask_file, 0)
                 mask_ = np.expand_dims(resize(mask_, (imgHeight, imgWidth), mode='constant', 
                                           preserve_range=True), axis=-1)
