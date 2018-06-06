@@ -118,6 +118,6 @@ def build_model(imgHeight, imgWidth, imgChannels):
     outputs = Conv2D(1, (1, 1), activation='sigmoid') (c9)
 
     model = Model(inputs=[inputs], outputs=[outputs])
-    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=[utils.dice_coef, metrics.binary_accuracy])
+    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=[utils.dice_coef])
     model.summary()
     return model
