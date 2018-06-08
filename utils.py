@@ -12,7 +12,6 @@ from keras import backend as K
 from enum import Enum
 from unetEnums import DataType
 
-smooth = 1.
     
 ###
 #if dataset has already been loaded and saved to file, only the files will be loaded
@@ -30,24 +29,25 @@ smooth = 1.
 #sizes_test: numpy array that contains original sizes of the images to resize the masks for correct submission
 ###
 def load_dataset(datasetPath, imgWidth, imgHeight, imgChannels, datasetType):
-    # Get image IDs
-    ids = next(os.walk(datasetPath))[1]
-    
     try:
         print("trying to load the numpy arrays from binary files")
-
         if datasetType == DataType.trainData:
+            ids = np.load("./BinaryNumpyFiles/stage1_train_fixed_ids.npy").tolist()
             images = np.load("./BinaryNumpyFiles/stage1_train_fixed_images.npy")
             masks = np.load("./BinaryNumpyFiles/stage1_train_fixed_masks.npy")
         if datasetType == DataType.testData:
+            ids = np.load("./BinaryNumpyFiles/stage2_test_final_ids.npy").tolist()
             images = np.load("./BinaryNumpyFiles/stage2_test_final_images.npy")
             sizes_test = np.load("./BinaryNumpyFiles/stage2_test_final_sizes_test.npy")
         if datasetType == DataType.valData:
+            ids = np.load("./BinaryNumpyFiles/extra_data_ids.npy").tolist()
             images = np.load("./BinaryNumpyFiles/extra_data_images.npy")
             masks = np.load("./BinaryNumpyFiles/extra_data_masks.npy")
 
     except FileNotFoundError as e:
         print(e)
+        # Get image IDs
+        ids = next(os.walk(datasetPath))[1]
         #list that saves original sizes of test images
         if datasetType == DataType.testData:        
             sizes_test = []          
@@ -69,6 +69,7 @@ def load_dataset(datasetPath, imgWidth, imgHeight, imgChannels, datasetType):
                 ###with cv2
                 #img = cv2.imread(path + '/images/' + id_ + '.png')[:,:,:imgChannels]
             except:
+                print("these ids could not be loaded:")
                 print(id_)
                 failedIds.append(id_)    
                 continue
@@ -95,6 +96,7 @@ def load_dataset(datasetPath, imgWidth, imgHeight, imgChannels, datasetType):
         if(len(failedIds) == 0):
             print('no failed ids')
         else:
+            print("removing failed ids")
             for n, failedId in tqdm(enumerate(failedIds), total=len(failedIds)):
                 index = ids.index(failedId)
                 ids.remove(failedId)
@@ -105,14 +107,19 @@ def load_dataset(datasetPath, imgWidth, imgHeight, imgChannels, datasetType):
         if not os.path.exists("./BinaryNumpyFiles/"):
             os.makedirs("./BinaryNumpyFiles/")
         
+
         #save arrays to disk for faster loading at the next time
-        if datasetType == DataType.testData:
-            np.save("./BinaryNumpyFiles/stage2_test_final_images.npy", images)
-            np.save("./BinaryNumpyFiles/stage2_test_final_sizes_test.npy", sizes_test)
+        idsAsNpArray = np.asarray(ids)
         if datasetType == DataType.trainData:
+            np.save("./BinaryNumpyFiles/stage1_train_fixed_ids.npy", idsAsNpArray)
             np.save("./BinaryNumpyFiles/stage1_train_fixed_images.npy", images)
             np.save("./BinaryNumpyFiles/stage1_train_fixed_masks.npy", masks)
+        if datasetType == DataType.testData:
+            np.save("./BinaryNumpyFiles/stage2_test_final_ids.npy", idsAsNpArray)
+            np.save("./BinaryNumpyFiles/stage2_test_final_images.npy", images)
+            np.save("./BinaryNumpyFiles/stage2_test_final_sizes_test.npy", sizes_test)
         if datasetType == DataType.valData:
+            np.save("./BinaryNumpyFiles/extra_data_ids.npy", idsAsNpArray)
             np.save("./BinaryNumpyFiles/extra_data_images.npy", images)
             np.save("./BinaryNumpyFiles/extra_data_masks.npy", masks)
 
@@ -121,7 +128,6 @@ def load_dataset(datasetPath, imgWidth, imgHeight, imgChannels, datasetType):
         return ids, images, sizes_test
     else:
         return ids, images, masks
-
 
 
 def scale_img_channels(an_img, img_channels):
@@ -136,7 +142,7 @@ def scale_img_channels(an_img, img_channels):
         return an_img
     
 
-# Define IoU metric
+# Define IoU metric (probably wrong, better do not use it at the moment)
 def mean_iou(y_true, y_pred):
     prec = []
     for t in np.arange(0.5, 1.0, 0.05):
@@ -150,6 +156,7 @@ def mean_iou(y_true, y_pred):
 
 # Metric function
 def dice_coef(y_true, y_pred):
+    smooth = 1.
     y_true_f = K.flatten(y_true)
     y_pred_f = K.flatten(y_pred)
     intersection = K.sum(y_true_f * y_pred_f)
@@ -157,7 +164,21 @@ def dice_coef(y_true, y_pred):
 
 # Loss funtion
 def dice_coef_loss(y_true, y_pred):
-    return -dice_coef(y_true, y_pred)
+    return 1-dice_coef(y_true, y_pred)
+
+
+def categorical_crossentropy(y_true, y_pred):
+    return K.categorical_crossentropy(y_true, y_pred)
+
+
+def binary_crossentropy(y_true, y_pred):
+    return K.mean(K.binary_crossentropy(y_true, y_pred), axis=-1)
+
+
+def binary_crossentropy_with_dice_coef_loss(y_true, y_pred):
+    w1 = 1
+    w2 = 1
+    return binary_crossentropy(y_true, y_pred) + dice_coef_loss(y_true, y_pred)
 
 
 # Run-length encoding stolen from https://www.kaggle.com/rakhlin/fast-run-length-encoding-python

@@ -40,35 +40,7 @@ def fit_model(model, modelDir, X_train, Y_train, validationSplit, epochs, batchS
     results = model.fit(X_train, Y_train, validation_split=validationSplit, batch_size=batchSize, epochs=epochs, 
                         callbacks=[earlystopper, checkpointer, tb])
 
-    
-    
-#Make predictions
-#Predict on train, val and test
-def make_predictions(model_path, X_train, X_val, X_test, sizes_test):
-    model = load_model(model_path, custom_objects={'dice_coef': utils.dice_coef})
-    #preds_train = model.predict(X_train[:int(X_train.shape[0]*0.9)], verbose=1)
-    #preds_val = model.predict(X_train[int(X_train.shape[0]*0.9):], verbose=1)
-    preds_train = model.predict(X_train, verbose=1)
-    preds_val = model.predict(X_val, verbose=1)
-    preds_test = model.predict(X_test, verbose=1)
 
-    # Threshold predictions
-    preds_train_t = (preds_train > 0.5).astype(np.uint8)
-    preds_val_t = (preds_val > 0.5).astype(np.uint8)
-    preds_test_t = (preds_test > 0.5).astype(np.uint8)
-
-    # Create list of upsampled test masks
-    preds_test_upsampled = []
-    for i in range(len(preds_test)):
-        ###skimage
-        preds_test_upsampled.append(resize(np.squeeze(preds_test[i]), 
-                                           (sizes_test[i][0], sizes_test[i][1]), 
-                                           mode='constant', preserve_range=True))
-        ###cv2
-        #preds_test_upsampled.append(cv2.resize(np.squeeze(preds_test[i]),
-                                                #(sizes_test[i][0], sizes_test[i][1]),
-                                                #interpolation=cv2.INTER_AREA))
-    return preds_train_t, preds_val_t, preds_test_upsampled
 
 
 # Build U-Net model
@@ -118,6 +90,44 @@ def build_model(imgHeight, imgWidth, imgChannels):
     outputs = Conv2D(1, (1, 1), activation='sigmoid') (c9)
 
     model = Model(inputs=[inputs], outputs=[outputs])
-    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=[utils.dice_coef])
+    model.compile(optimizer='adam', 
+                  loss='binary_crossentropy', 
+                  metrics=[utils.dice_coef, 
+                           utils.dice_coef_loss, 
+                           utils.binary_crossentropy, 
+                           utils.binary_crossentropy_with_dice_coef_loss])
     model.summary()
     return model
+
+   
+    
+#Make predictions
+#Predict on train, val and test
+def make_predictions(model_path, X_train, X_val, X_test, sizes_test):
+    model = load_model(model_path, custom_objects={'dice_coef': utils.dice_coef, 
+                                                   'dice_coef_loss':utils.dice_coef_loss, 
+                                                   'binary_crossentropy':utils.binary_crossentropy, 
+                                                   'binary_crossentropy_with_dice_coef_loss':utils.binary_crossentropy_with_dice_coef_loss})
+    #preds_train = model.predict(X_train[:int(X_train.shape[0]*0.9)], verbose=1)
+    #preds_val = model.predict(X_train[int(X_train.shape[0]*0.9):], verbose=1)
+    preds_train = model.predict(X_train, verbose=1)
+    preds_val = model.predict(X_val, verbose=1)
+    preds_test = model.predict(X_test, verbose=1)
+
+    # Threshold predictions
+    preds_train_t = (preds_train > 0.5).astype(np.uint8)
+    preds_val_t = (preds_val > 0.5).astype(np.uint8)
+    preds_test_t = (preds_test > 0.5).astype(np.uint8)
+
+    # Create list of upsampled test masks
+    preds_test_upsampled = []
+    for i in range(len(preds_test)):
+        ###skimage
+        preds_test_upsampled.append(resize(np.squeeze(preds_test[i]), 
+                                           (sizes_test[i][0], sizes_test[i][1]), 
+                                           mode='constant', preserve_range=True))
+        ###cv2
+        #preds_test_upsampled.append(cv2.resize(np.squeeze(preds_test[i]),
+                                                #(sizes_test[i][0], sizes_test[i][1]),
+                                                #interpolation=cv2.INTER_AREA))
+    return preds_train_t, preds_val_t, preds_test_upsampled
