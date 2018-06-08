@@ -1,4 +1,5 @@
 import os
+import os.path
 import numpy as np
 import sys
 #import cv2
@@ -8,16 +9,19 @@ from skimage.io import imread, imshow, imread_collection, concatenate_images
 from skimage.transform import resize
 from skimage.morphology import label
 from keras import backend as K
+from enum import Enum
+from unetEnums import DataType
 
 smooth = 1.
     
 ###
-#loads a dataset, resizes it and scales image channels
+#if dataset has already been loaded and saved to file, only the files will be loaded
+#otherwise loads a dataset, resizes it, scales image channels and saves to file
 #datasetPath: path to the dataset
 #imgWidth: width the images should be resized to
 #imgHeight: height the images should be resized to
 #imgChannels: defines if images are rgb or grayscale
-#testData: boolean value, if the dataset contains test images and therefore does not contain masks
+#dataType: Enum value, see "DataType" Enum class below
 ##
 #return:
 #ids: image ids
@@ -25,69 +29,100 @@ smooth = 1.
 #masks: numpy array with masks' data
 #sizes_test: numpy array that contains original sizes of the images to resize the masks for correct submission
 ###
-def load_dataset(datasetPath, imgWidth, imgHeight, imgChannels, testData):
+def load_dataset(datasetPath, imgWidth, imgHeight, imgChannels, datasetType):
     # Get image IDs
     ids = next(os.walk(datasetPath))[1]
-    #list that saves original sizes of test images
-    if testData:        
-        sizes_test = []          
-    # Get and resize images and masks
-    images = np.zeros((len(ids), imgHeight, imgWidth, imgChannels), dtype=np.uint8)
-    if not testData:
-        masks = np.zeros((len(ids), imgHeight, imgWidth, 1), dtype=np.bool)
-    print('Getting and resizing images ... ')
-    sys.stdout.flush()
-
-    failedIds = []
-    for n, id_ in tqdm(enumerate(ids), total=len(ids)):
-        path = datasetPath + id_
-        try:
-            ###with skimage
-            img = imread(path + '/images/' + id_ + '.png')[:,:,:imgChannels]
-            if testData:
-                sizes_test.append([img.shape[0], img.shape[1]])
-            ###with cv2
-            #img = cv2.imread(path + '/images/' + id_ + '.png')[:,:,:imgChannels]
-        except:
-            print(id_)
-            failedIds.append(id_)    
-            continue
-        
-        ###resize with skimage.transform
-        img = resize(img, (imgHeight, imgWidth), mode='constant', preserve_range=True)
-        ###resize with cv2
-        #img = cv2.resize(img, (imgHeight, imgWidth), interpolation=cv2.INTER_AREA)
-        ###scale image channels
-        img = scale_img_channels(img, imgChannels)
-        images[n] = img
-
-        if not testData:
-            mask = np.zeros((imgHeight, imgWidth, 1), dtype=np.bool)
-            for mask_file in next(os.walk(path + '/masks/'))[2]:
-                mask_ = imread(path + '/masks/' + mask_file, as_gray = False)
-                #mask_ = cv2.imread(path + '/masks/' + mask_file, 0)
-                mask_ = np.expand_dims(resize(mask_, (imgHeight, imgWidth), mode='constant', 
-                                          preserve_range=True), axis=-1)
-                #mask_ = np.expand_dims(cv2.resize(mask_, (imgHeight, imgWidth), interpolation=cv2.INTER_AREA), axis=-1)
-                mask = np.maximum(mask, mask_)
-            masks[n] = mask
     
-    if(len(failedIds) == 0):
-        print('no failed ids')
-    else:
-        for n, failedId in tqdm(enumerate(failedIds), total=len(failedIds)):
-            index = ids.index(failedId)
-            ids.remove(failedId)
-            images = np.delete(images, index, 0)
-            if not testData:
-                masks = np.delete(masks, index, 0)
+    try:
+        print("trying to load the numpy arrays from binary files")
 
+        if datasetType == DataType.trainData:
+            images = np.load("./BinaryNumpyFiles/stage1_train_fixed_images.npy")
+            masks = np.load("./BinaryNumpyFiles/stage1_train_fixed_masks.npy")
+        if datasetType == DataType.testData:
+            images = np.load("./BinaryNumpyFiles/stage2_test_final_images.npy")
+            sizes_test = np.load("./BinaryNumpyFiles/stage2_test_final_sizes_test.npy")
+        if datasetType == DataType.valData:
+            images = np.load("./BinaryNumpyFiles/extra_data_images.npy")
+            masks = np.load("./BinaryNumpyFiles/extra_data_masks.npy")
+
+    except FileNotFoundError as e:
+        print(e)
+        #list that saves original sizes of test images
+        if datasetType == DataType.testData:        
+            sizes_test = []          
+        # Get and resize images and masks
+        images = np.zeros((len(ids), imgHeight, imgWidth, imgChannels), dtype=np.uint8)
+        if datasetType != DataType.testData:
+            masks = np.zeros((len(ids), imgHeight, imgWidth, 1), dtype=np.bool)
+        print('Getting and resizing images ... ')
+        sys.stdout.flush()
+
+        failedIds = []
+        for n, id_ in tqdm(enumerate(ids), total=len(ids)):
+            path = datasetPath + id_
+            try:
+                ###with skimage
+                img = imread(path + '/images/' + id_ + '.png')[:,:,:imgChannels]
+                if datasetType == DataType.testData:
+                    sizes_test.append([img.shape[0], img.shape[1]])
+                ###with cv2
+                #img = cv2.imread(path + '/images/' + id_ + '.png')[:,:,:imgChannels]
+            except:
+                print(id_)
+                failedIds.append(id_)    
+                continue
+        
+            ###resize with skimage.transform
+            img = resize(img, (imgHeight, imgWidth), mode='constant', preserve_range=True)
+            ###resize with cv2
+            #img = cv2.resize(img, (imgHeight, imgWidth), interpolation=cv2.INTER_AREA)
+            ###scale image channels
+            img = scale_img_channels(img, imgChannels)
+            images[n] = img
+
+            if datasetType != DataType.testData:
+                mask = np.zeros((imgHeight, imgWidth, 1), dtype=np.bool)
+                for mask_file in next(os.walk(path + '/masks/'))[2]:
+                    mask_ = imread(path + '/masks/' + mask_file, as_gray = False)
+                    #mask_ = cv2.imread(path + '/masks/' + mask_file, 0)
+                    mask_ = np.expand_dims(resize(mask_, (imgHeight, imgWidth), mode='constant', 
+                                              preserve_range=True), axis=-1)
+                    #mask_ = np.expand_dims(cv2.resize(mask_, (imgHeight, imgWidth), interpolation=cv2.INTER_AREA), axis=-1)
+                    mask = np.maximum(mask, mask_)
+                masks[n] = mask
+    
+        if(len(failedIds) == 0):
+            print('no failed ids')
+        else:
+            for n, failedId in tqdm(enumerate(failedIds), total=len(failedIds)):
+                index = ids.index(failedId)
+                ids.remove(failedId)
+                images = np.delete(images, index, 0)
+                if datasetType != DataType.testData:
+                    masks = np.delete(masks, index, 0)
+        
+        if not os.path.exists("./BinaryNumpyFiles/"):
+            os.makedirs("./BinaryNumpyFiles/")
+        
+        #save arrays to disk for faster loading at the next time
+        if datasetType == DataType.testData:
+            np.save("./BinaryNumpyFiles/stage2_test_final_images.npy", images)
+            np.save("./BinaryNumpyFiles/stage2_test_final_sizes_test.npy", sizes_test)
+        if datasetType == DataType.trainData:
+            np.save("./BinaryNumpyFiles/stage1_train_fixed_images.npy", images)
+            np.save("./BinaryNumpyFiles/stage1_train_fixed_masks.npy", masks)
+        if datasetType == DataType.valData:
+            np.save("./BinaryNumpyFiles/extra_data_images.npy", images)
+            np.save("./BinaryNumpyFiles/extra_data_masks.npy", masks)
 
     print('Done!')
-    if testData:
+    if datasetType == DataType.testData:
         return ids, images, sizes_test
     else:
         return ids, images, masks
+
+
 
 def scale_img_channels(an_img, img_channels):
     for i in range(img_channels):
