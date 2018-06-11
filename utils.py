@@ -175,13 +175,14 @@ def binary_crossentropy(y_true, y_pred):
     return K.mean(K.binary_crossentropy(y_true, y_pred), axis=-1)
 
 
+##TODO play with w1 and w2 for best results
 def binary_crossentropy_with_dice_coef_loss(y_true, y_pred):
     w1 = 1
     w2 = 1
-    return binary_crossentropy(y_true, y_pred) + dice_coef_loss(y_true, y_pred)
+    return w1*binary_crossentropy(y_true, y_pred) + w2*dice_coef_loss(y_true, y_pred)
 
 
-# Run-length encoding stolen from https://www.kaggle.com/rakhlin/fast-run-length-encoding-python
+# Run-length encoding from https://www.kaggle.com/rakhlin/fast-run-length-encoding-python
 def rle_encoding(x):
     dots = np.where(x.T.flatten() == 1)[0]
     run_lengths = []
