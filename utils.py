@@ -148,7 +148,7 @@ def load_dataset(datasetPath, imgWidth, imgHeight, imgChannels, datasetType, con
             np.save("./BinaryNumpyFiles/extra_data_images.npy", images)
             np.save("./BinaryNumpyFiles/extra_data_masks.npy", masks)
             np.save("./BinaryNumpyFiles/extra_data_spaceBetween.npy", spaceBetween)
-            np.save("./BinaryNumpyFiles/stage1_train_fixed_concatenatedMasks.npy", concatenatedMasks)
+            np.save("./BinaryNumpyFiles/extra_data_concatenatedMasks.npy", concatenatedMasks)
 
     print('Done!')
     if datasetType == DataType.testData:
