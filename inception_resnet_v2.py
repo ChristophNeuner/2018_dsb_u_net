@@ -160,7 +160,7 @@ def inception_resnet_block(x, scale, block_type, block_idx, activation='relu'):
     return x
 
 
-def InceptionResNetV2(include_top=True,
+def InceptionResNetV2(include_top=False,
                       weights='imagenet',
                       input_tensor=None,
                       input_shape=None,
@@ -351,11 +351,14 @@ def InceptionResNetV2(include_top=True,
                                     cache_subdir='models',
                                     md5_hash='e693bd0210a403b3192acc6073ad2e96')
         else:
-            weights_filename = 'inception_resnet_v2_weights_tf_dim_ordering_tf_kernels_notop.h5'
-            weights_path = get_file(weights_filename,
-                                    BASE_WEIGHT_URL + weights_filename,
-                                    cache_subdir='models',
-                                    md5_hash='d19885ff4a710c122648d3b5c3b684e4')
+            ####https://github.com/fchollet/deep-learning-models/releases/download/v0.7/inception_resnet_v2_weights_tf_dim_ordering_tf_kernels_notop.h5
+            weights_path = './pretrained_weights/inception_resnet_v2_weights_tf_dim_ordering_tf_kernels_notop.h5'
+            #weights_filename = 'inception_resnet_v2_weights_tf_dim_ordering_tf_kernels_notop.h5'            
+            #weights_path = get_file(weights_filename,
+                                    #BASE_WEIGHT_URL + weights_filename,
+                                    #cache_subdir='models',
+                                    #md5_hash='d19885ff4a710c122648d3b5c3b684e4')
+
         model.load_weights(weights_path)
 
     return model

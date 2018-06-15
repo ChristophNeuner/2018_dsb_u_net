@@ -3,7 +3,7 @@ import utils
 import tensorflow as tf
 import numpy as np
 from datetime import datetime
-from keras.models import Model, load_model
+from keras.models import Model, load_model, save_model
 from keras.layers import Input
 from keras.layers.core import Lambda
 from keras.layers.convolutional import Conv2D, Conv2DTranspose
@@ -89,21 +89,21 @@ def build_unet_inception_resnet_v2(input_shape):
 
 #Fit model
 def fit_model(model, modelDir, X_train, Y_train, validationSplit, epochs, batchSize):
-    earlystopper = EarlyStopping(patience=5, verbose=1)
+    earlystopper = EarlyStopping(patience=20, verbose=1)
     currentModelDir = os.path.join(modelDir, datetime.now().strftime("%Y-%m-%d %H:%M:%S"),)
     if not os.path.exists(currentModelDir):
         os.makedirs(currentModelDir)
     filepath = os.path.join(currentModelDir, 'epoch{epoch:04d}-val_loss{val_loss:.2f}.h5')
     checkpointer = ModelCheckpoint(filepath, verbose=1, save_best_only=True)
     tb = TensorBoard(log_dir=currentModelDir, histogram_freq=0, batch_size=batchSize, write_graph=True, write_grads=False, write_images=False, embeddings_freq=0, embeddings_layer_names=None, embeddings_metadata=None)   
-    rlop = ReduceLROnPlateau(monitor='val_loss', factor= 0.5, patience= 5, verbose= 1, mode= 'auto', epsilon= 0.0001, cooldown= 5, min_lr= 1e-7)
+    rlop = ReduceLROnPlateau(monitor='val_loss', factor= 0.5, patience= 1, verbose= 1, mode= 'auto', epsilon= 0.0001, cooldown= 1, min_lr= 1e-7)
     ### TODO lrs
-    lrs = LearningRateScheduler()
+    #lrs = LearningRateScheduler()
     results = model.fit(X_train, Y_train, validation_split=validationSplit, batch_size=batchSize, epochs=epochs, 
-                        callbacks=[earlystopper, checkpointer, rlop, lrs, tb])
+                        callbacks=[earlystopper, checkpointer, rlop, tb])
 
    
-#Make predictions
+ #Make predictions
 #Predict on train, val and test
 def make_predictions(model_path, X_train, X_val, X_test, sizes_test):
     model = load_model(model_path, custom_objects={'dice_coef': utils.dice_coef, 
@@ -139,6 +139,7 @@ def make_predictions(model_path, X_train, X_val, X_test, sizes_test):
 
 
 ###from https://github.com/killthekitten/kaggle-carvana-2017/blob/master/models.py
+### changed number of output channels to two!!!!
 
 from keras.engine.topology import Input
 from keras.engine.training import Model
@@ -167,7 +168,12 @@ Unet with Inception Resnet V2 encoder
 Uses the same preprocessing as in Inception, Xception etc. (imagenet_utils.preprocess_input with mode 'tf' in new Keras version)
 """
 def get_unet_inception_resnet_v2(input_shape):
-    base_model = InceptionResNetV2(include_top=False, input_shape=input_shape)
+    modelPath = "./untrained_models/inception_resnet_v2_weights_tf_dim_ordering_tf_kernels_notop.h5"
+    if(os.path.isfile(modelPath)):
+        base_model = load_model(modelPath)
+    else:
+        base_model = InceptionResNetV2(include_top=False, input_shape=input_shape, weights='imagenet')
+        save_model(base_model, modelPath, overwrite=True)
     conv1 = base_model.get_layer('activation_3').output
     conv2 = base_model.get_layer('activation_5').output
     conv3 = base_model.get_layer('block35_10_ac').output
