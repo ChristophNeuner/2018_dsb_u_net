@@ -74,8 +74,13 @@ def build_original_unet(imgHeight, imgWidth, imgChannels):
     model.summary()
     return model
 
-def build_unet_inception_resnet_v2(input_shape):
-    model = get_unet_inception_resnet_v2(input_shape)
+def build_unet_inception_resnet_v2(input_shape, numberOfMaskChannels):
+    if numberOfMaskChannels == 1:
+        model = get_unet_inception_resnet_v2(input_shape)
+    if numberOfMaskChannels == 2:
+        model = get_unet_inception_resnet_v2_two_channel_masks(input_shape)
+    else:
+        raise ValueError('numberOfMaskChannels must be 1 or 2')
     model.compile(optimizer='adam', 
                   loss=utils.binary_crossentropy_with_dice_coef_loss, 
                   metrics=[utils.dice_coef, 
@@ -103,7 +108,7 @@ def fit_model(model, modelDir, X_train, Y_train, validationSplit, epochs, batchS
                         callbacks=[earlystopper, checkpointer, rlop, tb])
 
    
- #Make predictions
+#Make predictions
 #Predict on train, val and test
 def make_predictions(model_path, X_train, X_val, X_test, sizes_test):
     model = load_model(model_path, custom_objects={'dice_coef': utils.dice_coef, 
@@ -138,8 +143,7 @@ def make_predictions(model_path, X_train, X_val, X_test, sizes_test):
 
 
 
-###from https://github.com/killthekitten/kaggle-carvana-2017/blob/master/models.py
-### changed number of output channels to two!!!!
+### mostly from https://github.com/killthekitten/kaggle-carvana-2017/blob/master/models.py
 
 from keras.engine.topology import Input
 from keras.engine.training import Model
@@ -168,7 +172,7 @@ Unet with Inception Resnet V2 encoder
 Uses the same preprocessing as in Inception, Xception etc. (imagenet_utils.preprocess_input with mode 'tf' in new Keras version)
 """
 def get_unet_inception_resnet_v2(input_shape):
-    modelPath = "./untrained_models/inception_resnet_v2_weights_tf_dim_ordering_tf_kernels_notop.h5"
+    modelPath = "./untrained_models/inception_resnet_v2_model_untrained_one_channel_masks_notop.h5"
     if(os.path.isfile(modelPath)):
         base_model = load_model(modelPath)
     else:
@@ -200,5 +204,41 @@ def get_unet_inception_resnet_v2(input_shape):
     conv10 = conv_block_simple(conv10, 32, "conv10_2")
     conv10 = SpatialDropout2D(0.4)(conv10)
     x = Conv2D(1, (1, 1), activation="sigmoid", name="prediction")(conv10)
+    model = Model(base_model.input, x)
+    return model
+
+def get_unet_inception_resnet_v2_two_channel_masks(input_shape):
+    modelPath = "./untrained_models/inception_resnet_v2_model_untrained_two_channel_masks_notop.h5"
+    if(os.path.isfile(modelPath)):
+        base_model = load_model(modelPath)
+    else:
+        base_model = InceptionResNetV2(include_top=False, input_shape=input_shape, weights='imagenet')
+        save_model(base_model, modelPath, overwrite=True)
+    conv1 = base_model.get_layer('activation_3').output
+    conv2 = base_model.get_layer('activation_5').output
+    conv3 = base_model.get_layer('block35_10_ac').output
+    conv4 = base_model.get_layer('block17_20_ac').output
+    conv5 = base_model.get_layer('conv_7b_ac').output
+    up6 = concatenate([UpSampling2D()(conv5), conv4], axis=-1)
+    conv6 = conv_block_simple(up6, 256, "conv6_1")
+    conv6 = conv_block_simple(conv6, 256, "conv6_2")
+
+    up7 = concatenate([UpSampling2D()(conv6), conv3], axis=-1)
+    conv7 = conv_block_simple(up7, 256, "conv7_1")
+    conv7 = conv_block_simple(conv7, 256, "conv7_2")
+
+    up8 = concatenate([UpSampling2D()(conv7), conv2], axis=-1)
+    conv8 = conv_block_simple(up8, 128, "conv8_1")
+    conv8 = conv_block_simple(conv8, 128, "conv8_2")
+
+    up9 = concatenate([UpSampling2D()(conv8), conv1], axis=-1)
+    conv9 = conv_block_simple(up9, 64, "conv9_1")
+    conv9 = conv_block_simple(conv9, 64, "conv9_2")
+
+    up10 = concatenate([UpSampling2D()(conv9), base_model.input], axis=-1)
+    conv10 = conv_block_simple(up10, 48, "conv10_1")
+    conv10 = conv_block_simple(conv10, 32, "conv10_2")
+    conv10 = SpatialDropout2D(0.4)(conv10)
+    x = Conv2D(2, (1, 1), activation="sigmoid", name="prediction")(conv10)
     model = Model(base_model.input, x)
     return model

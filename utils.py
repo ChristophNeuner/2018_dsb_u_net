@@ -1,5 +1,4 @@
 import os
-import os.path
 import numpy as np
 import sys
 #import cv2
@@ -12,6 +11,7 @@ from keras import backend as K
 from enum import Enum
 from unetEnums import DataType
 from skimage import measure
+from keras.preprocessing.image import ImageDataGenerator
 
     
 ###
@@ -279,3 +279,53 @@ def prob_to_rles(x, cutoff=0.5):
     lab_img = label(x > cutoff)
     for i in range(1, lab_img.max() + 1):
         yield rle_encoding(lab_img == i)
+
+
+def augment(images, masks, spaceBetweenMasks, numberOfAugmentedImages, imgHeight, imgWidth, imgChannels):
+    _seed = 1
+    _batchSizeGenerator=1
+    ###augment training images and corresponding masks with keras' ImageDataGenerator class  
+    dataGenArgs = dict(rotation_range=90.,
+                         width_shift_range=0.1,
+                         height_shift_range=0.1,
+                         zoom_range=0.2)
+
+    imageDatagen = ImageDataGenerator(**dataGenArgs)
+    maskDatagen = ImageDataGenerator(**dataGenArgs)
+    spaceBetweenDatagen = ImageDataGenerator(**dataGenArgs)
+    imageDatagen.fit(images, seed = _seed)
+    maskDatagen.fit(masks, seed = _seed)
+    spaceBetweenDatagen.fit(spaceBetweenMasks, seed = _seed)
+    imageGenerator = imageDatagen.flow(images, batch_size=_batchSizeGenerator, shuffle=True, seed=_seed, save_to_dir=None)
+    maskGenerator = maskDatagen.flow(masks, batch_size=_batchSizeGenerator, shuffle=True, seed=_seed, save_to_dir=None)
+    spaceBetweenGenerator = spaceBetweenDatagen.flow(spaceBetweenMasks, batch_size=_batchSizeGenerator, shuffle=True, seed=_seed, save_to_dir=None)
+    #combine generators into one which yields image and masks
+    Generator = zip(imageGenerator, maskGenerator, spaceBetweenGenerator)
+
+    ###Get the images and masks out of the generator and save them in lists
+    augmentedImages = np.zeros((numberOfAugmentedImages, imgHeight, imgWidth, imgChannels), dtype=np.uint)
+    augmentedMasks = np.zeros((numberOfAugmentedImages, imgHeight, imgWidth, 1), dtype=np.bool)
+    augmentedSpaceBetweenMasks = np.zeros((numberOfAugmentedImages, imgHeight, imgWidth, 1), dtype=np.bool)
+
+    c = 0
+
+    for x, y, z in tqdm(Generator, total=numberOfAugmentedImages-1):
+        augmentedImages[c] = np.squeeze(x)
+    
+        m = np.squeeze(y, axis=0)
+        """
+        for i in range(0, m.shape[0]):
+            for j in range(0, m.shape[1]):
+                if m[i][j] <= 0:
+                    m[i][j] = 0.
+                else:
+                    m[i][j] = 255.
+        """
+        augmentedMasks[c] = m
+        augmentedSpaceBetweenMasks[c] = np.squeeze(z, axis=0)
+        c+=1
+        if c>=numberOfAugmentedImages:
+            break
+
+    return augmentedImages, augmentedMasks, augmentedSpaceBetweenMasks
+    
