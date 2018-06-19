@@ -187,11 +187,11 @@ plt.show()
 ### subtract predicted space between touching masks from the predicted test set masks
 import copy
 
-preds_test = []
-preds_test_subtracted = copy.deepcopy(preds_test)
+preds_test_t = []
 preds_test_t_spaceBetween = []
+preds_test_t_subtracted = copy.deepcopy(preds_test_t)
 
-for n, predictedMask, predictedSpaceBetween in tqdm(enumerate(zip(preds_test_subtracted, preds_test_t_spaceBetween)), total=len(preds_test)):
+for predictedMask, predictedSpaceBetween in tqdm(zip(preds_test_t_subtracted, preds_test_t_spaceBetween), total=len(preds_test_t_subtracted)):
     for i in range(0, predictedSpaceBetween.shape[0]):
             for j in range(0, predictedSpaceBetween.shape[1]):
                 if predictedSpaceBetween[i][j] > 0:
