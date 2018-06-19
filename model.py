@@ -16,7 +16,7 @@ from keras import metrics
 from keras import applications
 #import cv2
 from skimage.transform import resize
-
+from unetEnums import MaskType
 
 # Build original U-Net model: https://arxiv.org/abs/1505.04597
 def build_original_unet(imgHeight, imgWidth, imgChannels):   
@@ -75,12 +75,7 @@ def build_original_unet(imgHeight, imgWidth, imgChannels):
     return model
 
 def build_unet_inception_resnet_v2(input_shape, numberOfMaskChannels):
-    if numberOfMaskChannels == 1:
-        model = get_unet_inception_resnet_v2(input_shape)
-    if numberOfMaskChannels == 2:
-        model = get_unet_inception_resnet_v2_two_channel_masks(input_shape)
-    else:
-        raise ValueError('numberOfMaskChannels must be 1 or 2')
+    model = get_unet_inception_resnet_v2(input_shape, numberOfMaskChannels)
     model.compile(optimizer='adam', 
                   loss=utils.binary_crossentropy_with_dice_coef_loss, 
                   metrics=[utils.dice_coef, 
@@ -91,26 +86,35 @@ def build_unet_inception_resnet_v2(input_shape, numberOfMaskChannels):
     return model
    
 
-
 #Fit model
-def fit_model(model, modelDir, X_train, Y_train, validationSplit, epochs, batchSize):
+def fit_model(model, modelDir, X_train, Y_train, validationSplit, epochs, batchSize, maskType):
     earlystopper = EarlyStopping(patience=20, verbose=1)
-    currentModelDir = os.path.join(modelDir, datetime.now().strftime("%Y-%m-%d %H:%M:%S"),)
+    if maskType == MaskType.nucleusMask:
+        currentModelDir = os.path.join(modelDir, datetime.now().strftime("%Y-%m-%d %H:%M:%S"),)
+    elif maskType == MaskType.spaceBetweenMask:
+        currentModelDir = os.path.join(modelDir, datetime.now().strftime("%Y-%m-%d %H:%M:%S") + " spaceBetween",)
+    else:
+        raise ValueError("maskType must be one of unetEnums.MaskType")
     if not os.path.exists(currentModelDir):
         os.makedirs(currentModelDir)
     filepath = os.path.join(currentModelDir, 'epoch{epoch:04d}-val_loss{val_loss:.2f}.h5')
     checkpointer = ModelCheckpoint(filepath, verbose=1, save_best_only=True)
     tb = TensorBoard(log_dir=currentModelDir, histogram_freq=0, batch_size=batchSize, write_graph=True, write_grads=False, write_images=False, embeddings_freq=0, embeddings_layer_names=None, embeddings_metadata=None)   
     rlop = ReduceLROnPlateau(monitor='val_loss', factor= 0.5, patience= 1, verbose= 1, mode= 'auto', epsilon= 0.0001, cooldown= 1, min_lr= 1e-7)
-    ### TODO lrs
-    #lrs = LearningRateScheduler()
     results = model.fit(X_train, Y_train, validation_split=validationSplit, batch_size=batchSize, epochs=epochs, 
                         callbacks=[earlystopper, checkpointer, rlop, tb])
 
-   
+
 #Make predictions
 #Predict on train, val and test
-def make_predictions(model_path, X_train, X_val, X_test, sizes_test):
+def make_predictions(model_path, X_train, X_val, X_test, maskType):
+    if maskType==MaskType.nucleusMask:
+        t = 0.2
+    elif maskType==MaskType.spaceBetweenMask:
+        t = 0.5
+    else:
+        raise ValueError("maskType must be one of unetEnums.MaskType")
+
     model = load_model(model_path, custom_objects={'dice_coef': utils.dice_coef, 
                                                    'dice_coef_loss':utils.dice_coef_loss, 
                                                    'binary_crossentropy':utils.binary_crossentropy, 
@@ -122,26 +126,26 @@ def make_predictions(model_path, X_train, X_val, X_test, sizes_test):
     preds_test = model.predict(X_test, verbose=1)
 
     # Threshold predictions
-    preds_train_t = (preds_train > 0.5).astype(np.uint8)
-    preds_val_t = (preds_val > 0.5).astype(np.uint8)
-    preds_test_t = (preds_test > 0.5).astype(np.uint8)
+    preds_train_t = (preds_train > t).astype(np.uint8)
+    preds_val_t = (preds_val > t).astype(np.uint8)
+    preds_test_t = (preds_test > t).astype(np.uint8)
 
+    return preds_train, preds_val, preds_test, preds_train_t, preds_val_t, preds_test_t
+
+def upsamplePredictionsToOriginalSize(predsTest, originalSizes):
     # Create list of upsampled test masks
     preds_test_upsampled = []
-    for i in range(len(preds_test)):
+    for i in range(len(predsTest)):
         ###skimage
-        preds_test_upsampled.append(resize(np.squeeze(preds_test[i]), 
-                                           (sizes_test[i][0], sizes_test[i][1]), 
+        preds_test_upsampled.append(resize(np.squeeze(predsTest[i]), 
+                                           (originalSizes[i][0], originalSizes[i][1]), 
                                            mode='constant', preserve_range=True))
         ###cv2
-        #preds_test_upsampled.append(cv2.resize(np.squeeze(preds_test[i]),
-                                                #(sizes_test[i][0], sizes_test[i][1]),
+        #preds_test_upsampled.append(cv2.resize(np.squeeze(predsTest[i]),
+                                                #(originalSizes[i][0], originalSizes[i][1]),
                                                 #interpolation=cv2.INTER_AREA))
-    return preds_train_t, preds_val_t, preds_test_upsampled
 
-
-
-
+    return preds_test_upsampled
 
 ### mostly from https://github.com/killthekitten/kaggle-carvana-2017/blob/master/models.py
 
@@ -171,13 +175,14 @@ def conv_block_simple_no_bn(prevlayer, filters, prefix, strides=(1, 1)):
 Unet with Inception Resnet V2 encoder
 Uses the same preprocessing as in Inception, Xception etc. (imagenet_utils.preprocess_input with mode 'tf' in new Keras version)
 """
-def get_unet_inception_resnet_v2(input_shape):
-    modelPath = "./untrained_models/inception_resnet_v2_model_untrained_one_channel_masks_notop.h5"
-    if(os.path.isfile(modelPath)):
-        base_model = load_model(modelPath)
+def get_unet_inception_resnet_v2(input_shape, numberOfMaskChannels):
+    if numberOfMaskChannels == 1:
+        GetOrBuildModel("./untrained_models/inception_resnet_v2_model_untrained_one_channel_masks_notop.h5")
+    elif numberOfMaskChannels == 2:
+        GetOrBuildModel("./untrained_models/inception_resnet_v2_model_untrained_two_channel_masks_notop.h5")
     else:
-        base_model = InceptionResNetV2(include_top=False, input_shape=input_shape, weights='imagenet')
-        save_model(base_model, modelPath, overwrite=True)
+        raise ValueError('numberOfMaskChannels must be 1 or 2')
+
     conv1 = base_model.get_layer('activation_3').output
     conv2 = base_model.get_layer('activation_5').output
     conv3 = base_model.get_layer('block35_10_ac').output
@@ -203,42 +208,17 @@ def get_unet_inception_resnet_v2(input_shape):
     conv10 = conv_block_simple(up10, 48, "conv10_1")
     conv10 = conv_block_simple(conv10, 32, "conv10_2")
     conv10 = SpatialDropout2D(0.4)(conv10)
-    x = Conv2D(1, (1, 1), activation="sigmoid", name="prediction")(conv10)
+    if numberOfMaskChannels == 1:
+        x = Conv2D(1, (1, 1), activation="sigmoid", name="prediction")(conv10)
+    elif numberOfMaskChannels == 2:
+        x = Conv2D(2, (1, 1), activation="sigmoid", name="prediction")(conv10)
     model = Model(base_model.input, x)
     return model
 
-def get_unet_inception_resnet_v2_two_channel_masks(input_shape):
-    modelPath = "./untrained_models/inception_resnet_v2_model_untrained_two_channel_masks_notop.h5"
+
+def GetOrBuildModel(modelPath):
     if(os.path.isfile(modelPath)):
         base_model = load_model(modelPath)
     else:
         base_model = InceptionResNetV2(include_top=False, input_shape=input_shape, weights='imagenet')
         save_model(base_model, modelPath, overwrite=True)
-    conv1 = base_model.get_layer('activation_3').output
-    conv2 = base_model.get_layer('activation_5').output
-    conv3 = base_model.get_layer('block35_10_ac').output
-    conv4 = base_model.get_layer('block17_20_ac').output
-    conv5 = base_model.get_layer('conv_7b_ac').output
-    up6 = concatenate([UpSampling2D()(conv5), conv4], axis=-1)
-    conv6 = conv_block_simple(up6, 256, "conv6_1")
-    conv6 = conv_block_simple(conv6, 256, "conv6_2")
-
-    up7 = concatenate([UpSampling2D()(conv6), conv3], axis=-1)
-    conv7 = conv_block_simple(up7, 256, "conv7_1")
-    conv7 = conv_block_simple(conv7, 256, "conv7_2")
-
-    up8 = concatenate([UpSampling2D()(conv7), conv2], axis=-1)
-    conv8 = conv_block_simple(up8, 128, "conv8_1")
-    conv8 = conv_block_simple(conv8, 128, "conv8_2")
-
-    up9 = concatenate([UpSampling2D()(conv8), conv1], axis=-1)
-    conv9 = conv_block_simple(up9, 64, "conv9_1")
-    conv9 = conv_block_simple(conv9, 64, "conv9_2")
-
-    up10 = concatenate([UpSampling2D()(conv9), base_model.input], axis=-1)
-    conv10 = conv_block_simple(up10, 48, "conv10_1")
-    conv10 = conv_block_simple(conv10, 32, "conv10_2")
-    conv10 = SpatialDropout2D(0.4)(conv10)
-    x = Conv2D(2, (1, 1), activation="sigmoid", name="prediction")(conv10)
-    model = Model(base_model.input, x)
-    return model

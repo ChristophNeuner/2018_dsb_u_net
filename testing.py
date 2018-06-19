@@ -145,7 +145,7 @@ plt.show()
 path = "./stage1_train_fixed/00071198d059ba7f5914a526d124d28e6d010c92466da21d4a04cd5413362552"
 masks = np.zeros((1, imgHeight, imgWidth, 1), dtype=np.bool)
 mask = np.zeros((imgHeight, imgWidth, 1), dtype=np.bool)
-for mask_file in next(os.walk(path + '/masks/'))[2]:
+for n, mask_file in next(os.walk(path + '/masks/'))[2]:
     mask_ = imread(path + '/masks/' + mask_file, as_gray = False)
     mask_ = resize(mask_, (imgHeight, imgWidth), mode='constant', preserve_range=True)
     mask_ = np.expand_dims(mask_, axis=-1)    
@@ -182,6 +182,20 @@ plt.show()
 imshow(markers)
 plt.show()
 
+############################################################################
+
+### subtract predicted space between touching masks from the predicted test set masks
+import copy
+
+preds_test = []
+preds_test_subtracted = copy.deepcopy(preds_test)
+preds_test_t_spaceBetween = []
+
+for n, predictedMask, predictedSpaceBetween in tqdm(enumerate(zip(preds_test_subtracted, preds_test_t_spaceBetween)), total=len(preds_test)):
+    for i in range(0, predictedSpaceBetween.shape[0]):
+            for j in range(0, predictedSpaceBetween.shape[1]):
+                if predictedSpaceBetween[i][j] > 0:
+                    predictedMask[i][j] = 0
 
 
 
