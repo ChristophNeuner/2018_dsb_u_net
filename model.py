@@ -109,9 +109,9 @@ def fit_model(model, modelDir, X_train, Y_train, validationSplit, epochs, batchS
 #Predict on train, val and test
 def make_predictions(model_path, X_train, X_val, X_test, maskType):
     if maskType==MaskType.nucleusMask:
-        t = 0.2
-    elif maskType==MaskType.spaceBetweenMask:
         t = 0.5
+    elif maskType==MaskType.spaceBetweenMask:
+        t = 0.2
     else:
         raise ValueError("maskType must be one of unetEnums.MaskType")
 
