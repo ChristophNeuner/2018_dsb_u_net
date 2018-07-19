@@ -32,25 +32,25 @@ from keras.preprocessing.image import ImageDataGenerator
 #spaceBetween: binary numpy array of the same size as masks, space between touching masks
 #concatenatedMasks: boolean numpy array of shape (len(ids), imgHeight, imgWidth, 2), masks and spaceBetween concatenated
 ###
-def load_dataset(datasetPath, imgWidth, imgHeight, imgChannels, datasetType, contourThickness = 1):
+def load_dataset(datasetPath, imgWidth, imgHeight, imgChannels, datasetType, contourThickness):
     try:
         print("trying to load the numpy arrays from binary files")
         if datasetType == DataType.trainData:
             ids = np.load("./BinaryNumpyFiles/stage1_train_fixed_ids.npy").tolist()
             images = np.load("./BinaryNumpyFiles/stage1_train_fixed_images.npy")
             masks = np.load("./BinaryNumpyFiles/stage1_train_fixed_masks.npy")
-            spaceBetween = np.load("./BinaryNumpyFiles/stage1_train_fixed_spaceBetween.npy")
-            concatenatedMasks = np.load("./BinaryNumpyFiles/stage1_train_fixed_concatenatedMasks.npy")
+            spaceBetween = np.load("./BinaryNumpyFiles/stage1_train_fixed_spaceBetween_contourThickness==" + str(contourThickness) + ".npy")
+            concatenatedMasks = np.load("./BinaryNumpyFiles/stage1_train_fixed_concatenatedMasks_contourThickness==" + str(contourThickness) + ".npy")
         if datasetType == DataType.testData:
             ids = np.load("./BinaryNumpyFiles/stage2_test_final_ids.npy").tolist()
             images = np.load("./BinaryNumpyFiles/stage2_test_final_images.npy")
             sizes_test = np.load("./BinaryNumpyFiles/stage2_test_final_sizes_test.npy")
-        if datasetType == DataType.valData:
+        if datasetType == DataType.extraData:
             ids = np.load("./BinaryNumpyFiles/extra_data_ids.npy").tolist()
             images = np.load("./BinaryNumpyFiles/extra_data_images.npy")
             masks = np.load("./BinaryNumpyFiles/extra_data_masks.npy")
-            spaceBetween = np.load("./BinaryNumpyFiles/extra_data_spaceBetween.npy")
-            concatenatedMasks = np.load("./BinaryNumpyFiles/extra_data_concatenatedMasks.npy")
+            spaceBetween = np.load("./BinaryNumpyFiles/extra_data_spaceBetween_contourThickness==" + str(contourThickness) + ".npy")
+            concatenatedMasks = np.load("./BinaryNumpyFiles/extra_data_concatenatedMasks_contourThickness==" + str(contourThickness) + ".npy")
 
     except FileNotFoundError as e:
         print(e)
@@ -137,18 +137,18 @@ def load_dataset(datasetPath, imgWidth, imgHeight, imgChannels, datasetType, con
             np.save("./BinaryNumpyFiles/stage1_train_fixed_ids.npy", idsAsNpArray)
             np.save("./BinaryNumpyFiles/stage1_train_fixed_images.npy", images)
             np.save("./BinaryNumpyFiles/stage1_train_fixed_masks.npy", masks)
-            np.save("./BinaryNumpyFiles/stage1_train_fixed_spaceBetween.npy", spaceBetween)
-            np.save("./BinaryNumpyFiles/stage1_train_fixed_concatenatedMasks.npy", concatenatedMasks)
+            np.save("./BinaryNumpyFiles/stage1_train_fixed_spaceBetween_contourThickness==" + str(contourThickness) + ".npy", spaceBetween)
+            np.save("./BinaryNumpyFiles/stage1_train_fixed_concatenatedMasks_contourThickness==" + str(contourThickness) + ".npy", concatenatedMasks)
         if datasetType == DataType.testData:
             np.save("./BinaryNumpyFiles/stage2_test_final_ids.npy", idsAsNpArray)
             np.save("./BinaryNumpyFiles/stage2_test_final_images.npy", images)
             np.save("./BinaryNumpyFiles/stage2_test_final_sizes_test.npy", sizes_test)
-        if datasetType == DataType.valData:
+        if datasetType == DataType.extraData:
             np.save("./BinaryNumpyFiles/extra_data_ids.npy", idsAsNpArray)
             np.save("./BinaryNumpyFiles/extra_data_images.npy", images)
             np.save("./BinaryNumpyFiles/extra_data_masks.npy", masks)
-            np.save("./BinaryNumpyFiles/extra_data_spaceBetween.npy", spaceBetween)
-            np.save("./BinaryNumpyFiles/extra_data_concatenatedMasks.npy", concatenatedMasks)
+            np.save("./BinaryNumpyFiles/extra_data_spaceBetween_contourThickness==" + str(contourThickness) + ".npy", spaceBetween)
+            np.save("./BinaryNumpyFiles/extra_data_concatenatedMasks_contourThickness==" + str(contourThickness) + ".npy", concatenatedMasks)
 
     print('Done!')
     if datasetType == DataType.testData:
@@ -281,6 +281,32 @@ def prob_to_rles(x, cutoff=0.5):
         yield rle_encoding(lab_img == i)
 
 
+def BuildGenerator(images, masks, batchSize, datasetType):
+    _seed = 1
+    ###augment training images and corresponding masks with keras' ImageDataGenerator class  
+    dataGenArgs = dict(rotation_range=90.,
+                         width_shift_range=0.1,
+                         height_shift_range=0.1,
+                         zoom_range=0.2)
+
+    imageDatagen = ImageDataGenerator(**dataGenArgs)
+    maskDatagen = ImageDataGenerator(**dataGenArgs)
+    imageDatagen.fit(images, seed = _seed)
+    maskDatagen.fit(masks, seed = _seed)
+    s=True
+    if datasetType == DataType.valData:
+        s = False
+    imageGenerator = imageDatagen.flow(images, batch_size=batchSize, shuffle=s, seed=_seed, save_to_dir=None)
+    maskGenerator = maskDatagen.flow(masks, batch_size=batchSize, shuffle=s, seed=_seed, save_to_dir=None)
+
+    #combine generators into one which yields image and masks
+    return zip(imageGenerator, maskGenerator)
+
+
+####
+############### obsolete ######################
+####
+
 def augment(images, masks, spaceBetweenMasks, numberOfAugmentedImages, imgHeight, imgWidth, imgChannels):
     _seed = 1
     _batchSizeGenerator=1
@@ -328,4 +354,3 @@ def augment(images, masks, spaceBetweenMasks, numberOfAugmentedImages, imgHeight
             break
 
     return augmentedImages, augmentedMasks, augmentedSpaceBetweenMasks
-    
