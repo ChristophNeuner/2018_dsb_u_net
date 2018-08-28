@@ -152,9 +152,9 @@ Uses the same preprocessing as in Inception, Xception etc. (imagenet_utils.prepr
 """
 def get_unet_inception_resnet_v2(input_shape, numberOfMaskChannels):
     if numberOfMaskChannels == 1:
-        base_model = GetOrBuildModel("./untrained_models/inception_resnet_v2_model_untrained_one_channel_masks_notop.h5")
+        base_model = GetOrBuildModel("./encoder_models/inception_resnet_v2_model_untrained_1_channel_masks_notop.h5", input_shape)
     elif numberOfMaskChannels == 2:
-        base_model = GetOrBuildModel("./untrained_models/inception_resnet_v2_model_untrained_two_channel_masks_notop.h5")
+        base_model = GetOrBuildModel("./encoder_models/inception_resnet_v2_model_untrained_2_channel_masks_notop.h5", input_shape)
     else:
         raise ValueError('numberOfMaskChannels must be 1 or 2')
 
@@ -191,7 +191,7 @@ def get_unet_inception_resnet_v2(input_shape, numberOfMaskChannels):
     return model
 
 
-def GetOrBuildModel(modelPath):
+def GetOrBuildModel(modelPath, input_shape):
     if(os.path.isfile(modelPath)):
         base_model = load_model(modelPath)
     else:
