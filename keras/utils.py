@@ -32,25 +32,25 @@ from keras.preprocessing.image import ImageDataGenerator
 #spaceBetween: binary numpy array of the same size as masks, space between touching masks
 #concatenatedMasks: boolean numpy array of shape (len(ids), imgHeight, imgWidth, 2), masks and spaceBetween concatenated
 ###
-def load_dataset(datasetPath, imgWidth, imgHeight, imgChannels, datasetType, contourThickness):
+def load_dataset(datasetPath, binaryNumpyFilesPath, imgWidth, imgHeight, imgChannels, datasetType, contourThickness):
     try:
         print("trying to load the numpy arrays from binary files")
         if datasetType == DataType.trainData:
-            ids = np.load("./BinaryNumpyFiles/stage1_train_fixed_ids.npy").tolist()
-            images = np.load("./BinaryNumpyFiles/stage1_train_fixed_images.npy")
-            masks = np.load("./BinaryNumpyFiles/stage1_train_fixed_masks.npy")
-            spaceBetween = np.load("./BinaryNumpyFiles/stage1_train_fixed_spaceBetween_contourThickness==" + str(contourThickness) + ".npy")
-            concatenatedMasks = np.load("./BinaryNumpyFiles/stage1_train_fixed_concatenatedMasks_contourThickness==" + str(contourThickness) + ".npy")
+            ids = np.load(f"{binaryNumpyFilesPath}stage1_train_fixed_ids.npy").tolist()
+            images = np.load(f"{binaryNumpyFilesPath}stage1_train_fixed_images.npy")
+            masks = np.load(f"{binaryNumpyFilesPath}stage1_train_fixed_masks.npy")
+            spaceBetween = np.load(f"{binaryNumpyFilesPath}stage1_train_fixed_spaceBetween_contourThickness==" + str(contourThickness) + ".npy")
+            concatenatedMasks = np.load(f"{binaryNumpyFilesPath}stage1_train_fixed_concatenatedMasks_contourThickness==" + str(contourThickness) + ".npy")
         if datasetType == DataType.testData:
-            ids = np.load("./BinaryNumpyFiles/stage2_test_final_ids.npy").tolist()
-            images = np.load("./BinaryNumpyFiles/stage2_test_final_images.npy")
-            sizes_test = np.load("./BinaryNumpyFiles/stage2_test_final_sizes_test.npy")
+            ids = np.load(f"{binaryNumpyFilesPath}stage2_test_final_ids.npy").tolist()
+            images = np.load(f"{binaryNumpyFilesPath}stage2_test_final_images.npy")
+            sizes_test = np.load(f"{binaryNumpyFilesPath}stage2_test_final_sizes_test.npy")
         if datasetType == DataType.extraData:
-            ids = np.load("./BinaryNumpyFiles/extra_data_ids.npy").tolist()
-            images = np.load("./BinaryNumpyFiles/extra_data_images.npy")
-            masks = np.load("./BinaryNumpyFiles/extra_data_masks.npy")
-            spaceBetween = np.load("./BinaryNumpyFiles/extra_data_spaceBetween_contourThickness==" + str(contourThickness) + ".npy")
-            concatenatedMasks = np.load("./BinaryNumpyFiles/extra_data_concatenatedMasks_contourThickness==" + str(contourThickness) + ".npy")
+            ids = np.load(f"{binaryNumpyFilesPath}extra_data_ids.npy").tolist()
+            images = np.load(f"{binaryNumpyFilesPath}extra_data_images.npy")
+            masks = np.load(f"{binaryNumpyFilesPath}extra_data_masks.npy")
+            spaceBetween = np.load(f"{binaryNumpyFilesPath}extra_data_spaceBetween_contourThickness==" + str(contourThickness) + ".npy")
+            concatenatedMasks = np.load(f"{binaryNumpyFilesPath}extra_data_concatenatedMasks_contourThickness==" + str(contourThickness) + ".npy")
 
     except FileNotFoundError as e:
         print(e)
@@ -127,28 +127,28 @@ def load_dataset(datasetPath, imgWidth, imgHeight, imgChannels, datasetType, con
                     spaceBetween = np.delete(spaceBetween, index, 0)
                     concatenatedMasks = np.delete(concatenatedMasks, index, 0)
         
-        if not os.path.exists("./BinaryNumpyFiles/"):
-            os.makedirs("./BinaryNumpyFiles/")
+        if not os.path.exists(binaryNumpyFilesPath):
+            os.makedirs(binaryNumpyFilesPath)
         
 
         #save arrays to disk for faster loading next time
         idsAsNpArray = np.asarray(ids)
         if datasetType == DataType.trainData:
-            np.save("./BinaryNumpyFiles/stage1_train_fixed_ids.npy", idsAsNpArray)
-            np.save("./BinaryNumpyFiles/stage1_train_fixed_images.npy", images)
-            np.save("./BinaryNumpyFiles/stage1_train_fixed_masks.npy", masks)
-            np.save("./BinaryNumpyFiles/stage1_train_fixed_spaceBetween_contourThickness==" + str(contourThickness) + ".npy", spaceBetween)
-            np.save("./BinaryNumpyFiles/stage1_train_fixed_concatenatedMasks_contourThickness==" + str(contourThickness) + ".npy", concatenatedMasks)
+            np.save(f"{binaryNumpyFilesPath}stage1_train_fixed_ids.npy", idsAsNpArray)
+            np.save(f"{binaryNumpyFilesPath}stage1_train_fixed_images.npy", images)
+            np.save(f"{binaryNumpyFilesPath}stage1_train_fixed_masks.npy", masks)
+            np.save(f"{binaryNumpyFilesPath}stage1_train_fixed_spaceBetween_contourThickness==" + str(contourThickness) + ".npy", spaceBetween)
+            np.save(f"{binaryNumpyFilesPath}stage1_train_fixed_concatenatedMasks_contourThickness==" + str(contourThickness) + ".npy", concatenatedMasks)
         if datasetType == DataType.testData:
-            np.save("./BinaryNumpyFiles/stage2_test_final_ids.npy", idsAsNpArray)
-            np.save("./BinaryNumpyFiles/stage2_test_final_images.npy", images)
-            np.save("./BinaryNumpyFiles/stage2_test_final_sizes_test.npy", sizes_test)
+            np.save(f"{binaryNumpyFilesPath}stage2_test_final_ids.npy", idsAsNpArray)
+            np.save(f"{binaryNumpyFilesPath}stage2_test_final_images.npy", images)
+            np.save(f"{binaryNumpyFilesPath}stage2_test_final_sizes_test.npy", sizes_test)
         if datasetType == DataType.extraData:
-            np.save("./BinaryNumpyFiles/extra_data_ids.npy", idsAsNpArray)
-            np.save("./BinaryNumpyFiles/extra_data_images.npy", images)
-            np.save("./BinaryNumpyFiles/extra_data_masks.npy", masks)
-            np.save("./BinaryNumpyFiles/extra_data_spaceBetween_contourThickness==" + str(contourThickness) + ".npy", spaceBetween)
-            np.save("./BinaryNumpyFiles/extra_data_concatenatedMasks_contourThickness==" + str(contourThickness) + ".npy", concatenatedMasks)
+            np.save(f"{binaryNumpyFilesPath}extra_data_ids.npy", idsAsNpArray)
+            np.save(f"{binaryNumpyFilesPath}extra_data_images.npy", images)
+            np.save(f"{binaryNumpyFilesPath}extra_data_masks.npy", masks)
+            np.save(f"{binaryNumpyFilesPath}extra_data_spaceBetween_contourThickness==" + str(contourThickness) + ".npy", spaceBetween)
+            np.save(f"{binaryNumpyFilesPath}extra_data_concatenatedMasks_contourThickness==" + str(contourThickness) + ".npy", concatenatedMasks)
 
     print('Done!')
     if datasetType == DataType.testData:
